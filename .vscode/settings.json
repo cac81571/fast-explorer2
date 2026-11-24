@@ -1,0 +1,9 @@
+{
+  "files.encoding": "utf8",
+  "java.test.config": {
+    "vmArgs": [
+      "--add-opens=java.base/sun.nio.fs=ALL-UNNAMED",
+      "--add-exports=java.base/sun.nio.fs=ALL-UNNAMED"
+    ]
+  }
+}

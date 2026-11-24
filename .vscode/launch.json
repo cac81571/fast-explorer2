@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Fast Explorer",
+      "request": "launch",
+      "mainClass": "com.fastexplorer.FastExplorerApp",
+      "vmArgs": "--add-opens java.base/sun.nio.fs=ALL-UNNAMED --add-exports java.base/sun.nio.fs=ALL-UNNAMED"
+    },
+    {
+      "type": "java",
+      "name": "Fast Explorer (self-check)",
+      "request": "launch",
+      "mainClass": "com.fastexplorer.FastExplorerApp",
+      "args": "--self-check",
+      "vmArgs": "--add-opens java.base/sun.nio.fs=ALL-UNNAMED --add-exports java.base/sun.nio.fs=ALL-UNNAMED"
+    }
+  ]
+}
