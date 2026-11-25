@@ -99,7 +99,9 @@ public final class IndexPanel extends JPanel {
         bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
         filter.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "パスで絞り込み");
         filter.setName("indexFilter");
-        filter.setMaximumSize(new Dimension(280, filter.getPreferredSize().height));
+        int fieldHeight = filter.getPreferredSize().height;
+        filter.setPreferredSize(new Dimension(480, fieldHeight));
+        filter.setMaximumSize(new Dimension(Integer.MAX_VALUE, fieldHeight));
         filter.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
             public void insertUpdate(javax.swing.event.DocumentEvent event) {
