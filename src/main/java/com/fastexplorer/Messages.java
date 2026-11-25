@@ -33,6 +33,7 @@ public final class Messages {
     public static final String TIP_EXCLUDE_FILE = "この名前のファイルを除く。カンマ・空白・セミコロン区切り。* と ? が使えます";
     public static final String TIP_INCLUDE_DIR = "相対パス上のフォルダ名。空欄はすべて。カンマ・空白・セミコロン区切り。* と ?、src/main のようなパスも使えます";
     public static final String TIP_EXCLUDE_DIR = "このフォルダは結果から外し、検索とインデックスでも中に入りません。カンマ・空白・セミコロン区切り";
+    public static final String PATH_DISPLAY_LABEL = "フォルダパス表示";
     public static final String PATH_RELATIVE = "相対";
     public static final String PATH_ABSOLUTE = "絶対";
     public static final String TIP_PATH_DISPLAY = "場所列を、検索を始めたフォルダからの相対パスかフルパスで表示します";

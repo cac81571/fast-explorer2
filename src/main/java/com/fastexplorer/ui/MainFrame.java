@@ -28,6 +28,7 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -40,6 +41,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
@@ -95,7 +97,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final HistoryField excludeDir = new HistoryField();
     private final HistoryField extensions = new HistoryField();
     private final JComboBox<String> extensionPreset = new JComboBox<>();
-    private final JComboBox<String> pathDisplay = new JComboBox<>(new String[]{Messages.PATH_RELATIVE, Messages.PATH_ABSOLUTE});
+    private final JRadioButton pathRelative = new JRadioButton(Messages.PATH_RELATIVE);
+    private final JRadioButton pathAbsolute = new JRadioButton(Messages.PATH_ABSOLUTE);
     private final JCheckBox includeFolders = new JCheckBox(Messages.EXT_INCLUDE_FOLDERS, true);
     private final JButton back = new JButton(Messages.BACK);
     private final JButton forward = new JButton(Messages.FORWARD);
@@ -178,7 +181,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             loaded = new FavoriteTree();
             loadError = Messages.ERR_FAV_LOAD;
         }
-        FavoritesPanel panel = new FavoritesPanel(loaded, config.favoritesFile(), this::openFavorite, this::showBanner);
+        FavoritesPanel panel = new FavoritesPanel(
+                loaded, config.favoritesFile(), this::openFavorite, this::showBanner, inputHistory);
         panel.setCurrentPathSupplier(() -> controller.currentPath() == null ? null : controller.currentPath().toString());
         panel.setOpenInExplorer(this::openFolderInExplorer);
         panel.setIndexFolder(this::startIndex);
@@ -389,11 +393,19 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         JButton searchButton = new JButton(Messages.SEARCH);
         configureButton(searchButton, Messages.TIP_SEARCH, e -> startSearch(true));
         configureButton(cancelSearch, Messages.TIP_CANCEL, e -> cancelCurrent());
-        pathDisplay.setName("pathDisplay");
-        pathDisplay.setToolTipText(Messages.TIP_PATH_DISPLAY);
-        pathDisplay.setSelectedIndex(config.relativePaths() ? 0 : 1);
-        pathDisplay.addActionListener(e -> {
-            config.setRelativePaths(pathDisplay.getSelectedIndex() == 0);
+        ButtonGroup pathDisplayGroup = new ButtonGroup();
+        pathDisplayGroup.add(pathRelative);
+        pathDisplayGroup.add(pathAbsolute);
+        pathRelative.setName("pathRelative");
+        pathAbsolute.setName("pathAbsolute");
+        pathRelative.setToolTipText(Messages.TIP_PATH_DISPLAY);
+        pathAbsolute.setToolTipText(Messages.TIP_PATH_DISPLAY);
+        pathRelative.setOpaque(false);
+        pathAbsolute.setOpaque(false);
+        pathRelative.setSelected(config.relativePaths());
+        pathAbsolute.setSelected(!config.relativePaths());
+        java.awt.event.ActionListener pathDisplayListener = e -> {
+            config.setRelativePaths(pathRelative.isSelected());
             try {
                 config.save();
             } catch (IOException ignored) {
@@ -402,7 +414,9 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             if (searchMode) {
                 renderSearch(searchElapsed, searchFinished);
             }
-        });
+        };
+        pathRelative.addActionListener(pathDisplayListener);
+        pathAbsolute.addActionListener(pathDisplayListener);
         JPanel patternGrid = new JPanel(new GridBagLayout());
         patternGrid.setOpaque(false);
         patternGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -416,11 +430,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         patternGrid.add(cancelSearch, buttons);
         addPattern(patternGrid, 1, 0, Messages.INCLUDE_DIR, includeDir);
         addPattern(patternGrid, 1, 2, Messages.EXCLUDE_DIR, excludeDir);
-        GridBagConstraints pathStyle = patternConstraints(4, 1, 0);
-        pathStyle.gridwidth = 2;
-        pathStyle.fill = GridBagConstraints.NONE;
-        pathStyle.anchor = GridBagConstraints.WEST;
-        patternGrid.add(pathDisplay, pathStyle);
         JLabel extensionLabel = new JLabel(Messages.EXT_LABEL);
         extensions.setPlaceholder(Messages.EXT_PLACEHOLDER);
         extensions.setToolTipText(Messages.TIP_EXT);
@@ -441,6 +450,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensionPreset.setName("extensionPreset");
         extensionPreset.addActionListener(e -> applyExtensionPreset());
 
+        JLabel pathDisplayLabel = new JLabel(Messages.PATH_DISPLAY_LABEL);
+        pathDisplayLabel.setLabelFor(pathRelative);
         JPanel extensionRow = row();
         extensionRow.add(extensionLabel);
         extensionRow.add(Box.createHorizontalStrut(6));
@@ -450,6 +461,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensionRow.add(Box.createHorizontalStrut(8));
         extensionRow.add(includeFolders);
         extensionRow.add(Box.createHorizontalGlue());
+        extensionRow.add(Box.createHorizontalStrut(12));
+        extensionRow.add(pathDisplayLabel);
+        extensionRow.add(Box.createHorizontalStrut(6));
+        extensionRow.add(pathRelative);
+        extensionRow.add(pathAbsolute);
 
         error.setOpaque(true);
         error.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
@@ -700,9 +716,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             field.setPreferredSize(new Dimension(220, fieldHeight));
             field.setMaximumSize(new Dimension(Integer.MAX_VALUE, fieldHeight));
         }
-        pathDisplay.setMinimumSize(new Dimension(88, fieldHeight));
-        pathDisplay.setPreferredSize(new Dimension(96, fieldHeight));
-        pathDisplay.setMaximumSize(new Dimension(120, fieldHeight));
+        for (JRadioButton pathStyle : List.of(pathRelative, pathAbsolute)) {
+            Dimension pathSize = pathStyle.getPreferredSize();
+            pathStyle.setMinimumSize(pathSize);
+            pathStyle.setMaximumSize(pathSize);
+        }
         extensions.setMinimumSize(new Dimension(160, fieldHeight));
         extensions.setPreferredSize(new Dimension(220, fieldHeight));
         extensions.setMaximumSize(new Dimension(280, fieldHeight));
@@ -1214,6 +1232,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         includeDir.setHistory(List.of());
         excludeDir.setHistory(List.of());
         extensions.setHistory(List.of());
+        favorites.clearFilterHistory();
         status.setText("入力履歴を消去しました");
     }
 

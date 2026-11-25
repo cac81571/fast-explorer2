@@ -15,7 +15,7 @@ import java.util.Locale;
  */
 public final class InputHistory implements AutoCloseable {
     public enum Bucket {
-        PATH, SEARCH, EXTENSION, INCLUDE_FILE, EXCLUDE_FILE, INCLUDE_DIR, EXCLUDE_DIR
+        PATH, SEARCH, EXTENSION, INCLUDE_FILE, EXCLUDE_FILE, INCLUDE_DIR, EXCLUDE_DIR, FAVORITES_FILTER
     }
 
     private static final String SCHEMA = """

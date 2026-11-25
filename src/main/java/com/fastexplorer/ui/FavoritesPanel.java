@@ -5,6 +5,7 @@ import com.fastexplorer.favorites.FavoriteNames;
 import com.fastexplorer.favorites.FavoriteNode;
 import com.fastexplorer.favorites.FavoriteTree;
 import com.fastexplorer.favorites.FavoritesStore;
+import com.fastexplorer.history.InputHistory;
 import com.formdev.flatlaf.FlatClientProperties;
 
 import javax.swing.BorderFactory;
@@ -21,7 +22,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -60,16 +60,24 @@ public final class FavoritesPanel extends JPanel {
     private final Path file;
     private final Consumer<String> openPath;
     private final Consumer<String> onError;
-    private final JTextField filter = new JTextField();
+    private final InputHistory inputHistory;
+    private final HistoryField filter = new HistoryField();
     private final JTree view = new JTree();
     private final FavoriteRenderer renderer = new FavoriteRenderer();
 
-    public FavoritesPanel(FavoriteTree tree, Path file, Consumer<String> openPath, Consumer<String> onError) {
+    public FavoritesPanel(
+            FavoriteTree tree,
+            Path file,
+            Consumer<String> openPath,
+            Consumer<String> onError,
+            InputHistory inputHistory
+    ) {
         super(new BorderLayout(0, 6));
         this.tree = tree;
         this.file = file;
         this.openPath = openPath;
         this.onError = onError;
+        this.inputHistory = inputHistory;
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 4));
         setMinimumSize(new Dimension(180, 120));
         setPreferredSize(new Dimension(260, 400));
@@ -189,6 +197,15 @@ public final class FavoritesPanel extends JPanel {
         applyTreeSelectionStyle();
     }
 
+    public void clearFilterHistory() {
+        filter.setHistory(List.of());
+    }
+
+    private void rememberFilter() {
+        inputHistory.remember(InputHistory.Bucket.FAVORITES_FILTER, filter.getText());
+        filter.setHistory(inputHistory.list(InputHistory.Bucket.FAVORITES_FILTER));
+    }
+
     private void applyTreeSelectionStyle() {
         view.putClientProperty(FlatClientProperties.TREE_WIDE_SELECTION, true);
         // Keep the focused (blue) selection look even after focus moves to the file table.
@@ -210,11 +227,17 @@ public final class FavoritesPanel extends JPanel {
         JLabel title = new JLabel(Messages.FAVORITES);
         title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD, 14f));
         title.setAlignmentX(LEFT_ALIGNMENT);
-        filter.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, Messages.FAV_FILTER);
+        filter.setGrowHorizontally(true);
+        filter.setPlaceholder(Messages.FAV_FILTER);
         filter.setToolTipText(Messages.TIP_FAV_FILTER);
         filter.setName("favoritesFilter");
         filter.setAlignmentX(LEFT_ALIGNMENT);
         filter.setMaximumSize(new Dimension(Integer.MAX_VALUE, filter.getPreferredSize().height));
+        filter.setHistory(inputHistory.list(InputHistory.Bucket.FAVORITES_FILTER));
+        filter.setOnDelete(value -> {
+            inputHistory.delete(InputHistory.Bucket.FAVORITES_FILTER, value);
+            filter.setHistory(inputHistory.list(InputHistory.Bucket.FAVORITES_FILTER));
+        });
         filter.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent event) {
@@ -229,6 +252,13 @@ public final class FavoritesPanel extends JPanel {
             @Override
             public void changedUpdate(DocumentEvent event) {
                 reload();
+            }
+        });
+        filter.addActionListener(event -> {
+            if (SearchTriggers.enterInClosedField(event, filter.isAdjusting(), filter.isPopupVisible())) {
+                rememberFilter();
+            } else if (!filter.isAdjusting() && "comboBoxChanged".equals(event.getActionCommand())) {
+                rememberFilter();
             }
         });
         JPanel buttons = new JPanel();
