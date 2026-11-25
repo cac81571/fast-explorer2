@@ -320,9 +320,13 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
                 startIndex(controller.currentPath().toString());
             }
         });
+        JMenuItem closeAllSearch = new JMenuItem(Messages.MENU_CLOSE_ALL_SEARCH);
+        closeAllSearch.setName("closeAllSearchTabs");
+        closeAllSearch.addActionListener(e -> closeAllSearchTabs());
         darkItem.addActionListener(e -> toggleTheme());
         view.add(refresh);
         view.add(indexCurrent);
+        view.add(closeAllSearch);
         view.add(darkItem);
 
         JMenu help = new JMenu(Messages.MENU_HELP);
@@ -927,6 +931,38 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (tab == null) {
             return;
         }
+        cancelSearchIfClosing(tab);
+        if (tab == activeSearch) {
+            activeSearch = null;
+        }
+        tabs.removeTabAt(index);
+    }
+
+    private void closeAllSearchTabs() {
+        boolean cancelled = false;
+        if (searchMode && activeSearch != null && !activeSearch.finished()) {
+            controller.cancel();
+            searchMode = false;
+            searchRenderTimer.stop();
+            cancelSearch.setEnabled(false);
+            cancelled = true;
+        }
+        activeSearch = null;
+        for (int i = tabs.getTabCount() - 1; i >= 0; i--) {
+            if (SearchResultTab.fromComponent(tabs.getComponentAt(i)) != null) {
+                tabs.removeTabAt(i);
+            }
+        }
+        if (cancelled) {
+            status.setText(Messages.CANCELLED);
+        }
+        showListTab();
+        if (!cancelled) {
+            refreshStatusForSelectedTab();
+        }
+    }
+
+    private void cancelSearchIfClosing(SearchResultTab tab) {
         if (tab == activeSearch && searchMode && !tab.finished()) {
             controller.cancel();
             searchMode = false;
@@ -934,10 +970,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             cancelSearch.setEnabled(false);
             status.setText(Messages.CANCELLED);
         }
-        if (tab == activeSearch) {
-            activeSearch = null;
-        }
-        tabs.removeTabAt(index);
     }
 
     private void maybeCapture(LoadStatus loadStatus) {

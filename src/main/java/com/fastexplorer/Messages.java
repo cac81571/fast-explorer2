@@ -85,6 +85,7 @@ public final class Messages {
     public static final String MENU_CLEAR_FILE_CACHE = "ローカルキャッシュを消去";
     public static final String MENU_CLEAR_HISTORY = "入力履歴を消去";
     public static final String MENU_INDEX_CURRENT = "このフォルダをインデックス";
+    public static final String MENU_CLOSE_ALL_SEARCH = "検索タブをすべて閉じる";
 
     public static final String TAB_LIST = "一覧";
     public static final String TAB_SEARCH = "検索";
