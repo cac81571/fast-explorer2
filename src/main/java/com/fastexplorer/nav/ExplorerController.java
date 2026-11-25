@@ -183,11 +183,16 @@ public final class ExplorerController {
         tasks.submit(() -> runSearch(root, names, effective, includeSubfolders, req, start));
     }
 
+    /** Invalidate the in-flight listing or search immediately. */
+    public void cancel() {
+        requestSeq.incrementAndGet();
+    }
+
     /** Cancel the in-flight listing or search and show the current folder again. */
     public void cancelAndReload() {
         Path cur = current;
         if (cur == null) {
-            requestSeq.incrementAndGet();
+            cancel();
             return;
         }
         begin(cur, false);
@@ -321,6 +326,38 @@ public final class ExplorerController {
             long startNano
     ) {
         SearchService service = new SearchService(cache, lister, blockingIo, settings);
+        // Merge by directory and publish to the EDT at most ~4 times/sec.
+        java.util.LinkedHashMap<String, List<SearchHit>> pendingDirs = new java.util.LinkedHashMap<>();
+        int[] pendingProgress = {-1, 0};
+        long[] lastPublishNs = {0L};
+        final long minIntervalNs = 250_000_000L;
+        Runnable publish = () -> {
+            if (!isCurrent(req)) {
+                pendingDirs.clear();
+                return;
+            }
+            List<DirUpdate> batch = new ArrayList<>(pendingDirs.size());
+            pendingDirs.forEach((key, matches) -> batch.add(new DirUpdate(key, matches)));
+            pendingDirs.clear();
+            int scanned = pendingProgress[0];
+            int errors = pendingProgress[1];
+            long elapsed = elapsed(startNano);
+            lastPublishNs[0] = System.nanoTime();
+            edt.accept(() -> {
+                if (!isCurrent(req)) {
+                    return;
+                }
+                for (DirUpdate update : batch) {
+                    if (!isCurrent(req)) {
+                        return;
+                    }
+                    listener.onSearchDirectory(update.dirKey(), update.matches(), elapsed);
+                }
+                if (isCurrent(req) && scanned >= 0) {
+                    listener.onSearchProgress(scanned, errors, elapsed);
+                }
+            });
+        };
         try {
             service.search(root, names, () -> !isCurrent(req), new SearchService.Listener() {
                 @Override
@@ -341,12 +378,10 @@ public final class ExplorerController {
                     if (!isCurrent(req)) {
                         return;
                     }
-                    long elapsed = elapsed(startNano);
-                    edt.accept(() -> {
-                        if (isCurrent(req)) {
-                            listener.onSearchDirectory(dirKey, matches, elapsed);
-                        }
-                    });
+                    pendingDirs.put(dirKey, List.copyOf(matches));
+                    if (System.nanoTime() - lastPublishNs[0] >= minIntervalNs) {
+                        publish.run();
+                    }
                 }
 
                 @Override
@@ -354,19 +389,22 @@ public final class ExplorerController {
                     if (!isCurrent(req)) {
                         return;
                     }
-                    long elapsed = elapsed(startNano);
-                    edt.accept(() -> {
-                        if (isCurrent(req)) {
-                            listener.onSearchProgress(scannedDirs, errors, elapsed);
-                        }
-                    });
+                    pendingProgress[0] = scannedDirs;
+                    pendingProgress[1] = errors;
+                    if (System.nanoTime() - lastPublishNs[0] >= minIntervalNs) {
+                        publish.run();
+                    }
                 }
 
                 @Override
                 public void onFinished(int scannedDirs, int errors, boolean cancelled) {
                     if (!isCurrent(req) || cancelled) {
+                        pendingDirs.clear();
                         return;
                     }
+                    pendingProgress[0] = scannedDirs;
+                    pendingProgress[1] = errors;
+                    publish.run();
                     long elapsed = elapsed(startNano);
                     edt.accept(() -> {
                         if (!isCurrent(req)) {
@@ -383,6 +421,9 @@ public final class ExplorerController {
             LOG.log(Level.WARNING, "search failed", e);
             reportError(req, Messages.ERR_IO + ": " + e.getMessage(), true);
         }
+    }
+
+    private record DirUpdate(String dirKey, List<SearchHit> matches) {
     }
 
     private void openWithDesktop(Path path) {

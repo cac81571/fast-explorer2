@@ -19,6 +19,7 @@ public final class Messages {
     public static final String SEARCH_SUBFOLDERS = "サブフォルダを検索する";
     public static final String TIP_SEARCH_SUBFOLDERS = "オフにすると、いまのフォルダだけを検索します";
     public static final String CANCEL = "中止";
+    public static final String CANCELLED = "中止しました";
     public static final String THEME_DARK = "ダーク";
     public static final String THEME_LIGHT = "ライト";
 

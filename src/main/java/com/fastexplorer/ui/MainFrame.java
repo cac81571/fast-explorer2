@@ -117,6 +117,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final FavoritesPanel favorites;
     private final JSplitPane split;
     private final javax.swing.Timer dividerSaver;
+    private final javax.swing.Timer searchRenderTimer;
 
     private final List<SearchHit> searchHits = new ArrayList<>();
     private List<FileRow> browseRows = List.of();
@@ -125,6 +126,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private ExtensionFilter activeSearchFilter = ExtensionFilter.all();
     private long searchElapsed;
     private boolean searchFinished;
+    private boolean searchTableDirty;
     private boolean dark;
     private int searchScanned;
     private int searchErrors;
@@ -170,6 +172,12 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         this.split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, favorites, new JScrollPane(table));
         this.dividerSaver = new javax.swing.Timer(400, event -> saveDivider());
         this.dividerSaver.setRepeats(false);
+        this.searchRenderTimer = new javax.swing.Timer(300, event -> {
+            if (searchMode && searchTableDirty) {
+                renderSearch(searchElapsed, searchFinished);
+            }
+        });
+        this.searchRenderTimer.setRepeats(true);
         build();
     }
 
@@ -843,6 +851,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private void renderSearch(long elapsedMillis, boolean done) {
         searchElapsed = elapsedMillis;
         searchFinished = done;
+        searchTableDirty = false;
         Path root = controller.currentPath();
         boolean relative = config.relativePaths();
         List<FileRow> rows = searchHits.stream()
@@ -860,6 +869,14 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             rows = rows.subList(0, cap);
         }
         searchModel.setRows(rows);
+        renderSearchStatus(rows.size(), elapsedMillis, done);
+    }
+
+    private void renderSearchStatus(long elapsedMillis, boolean done) {
+        renderSearchStatus(Math.min(searchHits.size(), config.settings().searchMaxResults()), elapsedMillis, done);
+    }
+
+    private void renderSearchStatus(int rowCount, long elapsedMillis, boolean done) {
         String detail;
         if (done) {
             detail = Messages.SEARCH_DONE + " · 走査 " + searchScanned + " フォルダ";
@@ -875,8 +892,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (!filterText.isEmpty()) {
             detail += " · " + filterText;
         }
-        String line = Messages.items(rows.size(), elapsedMillis, Messages.SOURCE_SEARCH, detail);
-        if (done && rows.isEmpty()) {
+        String line = Messages.items(rowCount, elapsedMillis, Messages.SOURCE_SEARCH, detail);
+        if (done && rowCount == 0) {
             line += " · " + Messages.NO_HITS;
         }
         status.setText(line);
@@ -1226,6 +1243,22 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             copyCancel.set(true);
             return;
         }
+        // Search cancel must not be skipped when an index job is also running.
+        if (searchMode) {
+            if (indexer.hasRunning()) {
+                indexer.cancelAll();
+            }
+            // Invalidate first so already-queued UI updates become no-ops, then refresh the listing.
+            controller.cancel();
+            searchRenderTimer.stop();
+            searchTableDirty = false;
+            searchMode = false;
+            searchFinished = true;
+            cancelSearch.setEnabled(false);
+            status.setText(Messages.CANCELLED);
+            controller.cancelAndReload();
+            return;
+        }
         if (indexer.hasRunning()) {
             indexer.cancelAll();
             return;
@@ -1439,6 +1472,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     public void onLoadStarted(Path directory) {
         showListTab();
         searchMode = false;
+        searchTableDirty = false;
+        searchRenderTimer.stop();
         cancelSearch.setEnabled(false);
         clearBanner();
         status.setText(Messages.LOADING);
@@ -1495,40 +1530,64 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         searchErrors = 0;
         searchHits.clear();
         searchModel.setRows(List.of());
+        searchTableDirty = false;
+        searchFinished = false;
         showSearchTab();
         cancelSearch.setEnabled(true);
         clearBanner();
         status.setText(Messages.SEARCHING);
+        if (!searchRenderTimer.isRunning()) {
+            searchRenderTimer.start();
+        }
     }
 
     @Override
     public void onSearchHits(List<SearchHit> cacheHits, long elapsedMillis) {
+        if (!searchMode) {
+            return;
+        }
         searchHits.clear();
         searchHits.addAll(cacheHits);
         capSearchHits();
-        renderSearch(elapsedMillis, false);
+        searchElapsed = elapsedMillis;
+        searchFinished = false;
+        searchTableDirty = true;
+        renderSearchStatus(elapsedMillis, false);
     }
 
     @Override
     public void onSearchDirectory(String dirKey, List<SearchHit> matches, long elapsedMillis) {
+        if (!searchMode) {
+            return;
+        }
         searchHits.removeIf(hit -> hit.dirKey().equals(dirKey));
         searchHits.addAll(matches);
         capSearchHits();
-        renderSearch(elapsedMillis, false);
+        searchElapsed = elapsedMillis;
+        searchTableDirty = true;
     }
 
     @Override
     public void onSearchProgress(int scannedDirs, int errors, long elapsedMillis) {
+        if (!searchMode) {
+            return;
+        }
         searchScanned = scannedDirs;
         searchErrors = errors;
-        renderSearch(elapsedMillis, false);
+        searchElapsed = elapsedMillis;
+        renderSearchStatus(elapsedMillis, false);
     }
 
     @Override
     public void onSearchFinished(int scannedDirs, int errors, long elapsedMillis) {
+        if (!searchMode) {
+            return;
+        }
         searchScanned = scannedDirs;
         searchErrors = errors;
         cancelSearch.setEnabled(false);
+        searchRenderTimer.stop();
+        searchTableDirty = false;
         renderSearch(elapsedMillis, true);
         if (screenshotFile != null) {
             javax.swing.Timer timer = new javax.swing.Timer(700, e -> captureSearchScreenshot());
