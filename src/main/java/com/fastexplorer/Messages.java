@@ -44,7 +44,7 @@ public final class Messages {
     public static final String COPY_FULL = "フルパスをコピー";
     public static final String COPY_RELATIVE = "相対パスをコピー";
     public static final String COPY_FILE_NAME = "ファイル名をコピー";
-    public static final String COPY_FOLDER_NAME = "フォルダ名をコピー";
+    public static final String COPY_FOLDER_NAME = "フォルダパスをコピー";
     public static final String EXT_LABEL = "拡張子";
     public static final String EXT_PLACEHOLDER = "例: java, xml, txt";
     public static final String EXT_INCLUDE_FOLDERS = "フォルダを含める";

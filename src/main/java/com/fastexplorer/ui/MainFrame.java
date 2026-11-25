@@ -1093,7 +1093,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
                         ? ListedPaths.fullDisplay(row.path())
                         : ListedPaths.relativeDisplay(root, row.path(), windows);
                 case FILE_NAME -> ListedPaths.fileName(row.path());
-                case FOLDER_NAME -> ListedPaths.folderName(row.path(), directory);
+                case FOLDER_NAME -> ListedPaths.relativeFolderPath(root, row.path(), directory, windows);
             });
         }
         java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()

@@ -65,6 +65,32 @@ public final class ListedPaths {
         return name == null ? parent.toString() : name.toString();
     }
 
+    /**
+     * Relative folder path under {@code root}: for a file, the parent path with the file name
+     * removed; for a directory, the directory's own relative path. Empty when the folder is
+     * {@code root} itself.
+     */
+    public static String relativeFolderPath(Path root, Path target, boolean directory, boolean windows) {
+        if (target == null) {
+            return "";
+        }
+        Path folder = directory ? target : target.getParent();
+        if (folder == null) {
+            return "";
+        }
+        if (root == null) {
+            return fullDisplay(folder, windows);
+        }
+        String rootSlashed = stripTrailingSlash(root.toString().replace('\\', '/'));
+        String folderSlashed = stripTrailingSlash(folder.toString().replace('\\', '/'));
+        String rootCompare = windows ? rootSlashed.toLowerCase(Locale.ROOT) : rootSlashed;
+        String folderCompare = windows ? folderSlashed.toLowerCase(Locale.ROOT) : folderSlashed;
+        if (folderCompare.equals(rootCompare)) {
+            return "";
+        }
+        return relativeDisplay(root, folder, windows);
+    }
+
     public static String joinLines(List<String> lines, boolean windows) {
         return String.join(windows ? "\r\n" : "\n", lines);
     }

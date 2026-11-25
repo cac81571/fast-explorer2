@@ -40,7 +40,19 @@ class ListedPathsTest {
         assertEquals("file.txt", ListedPaths.fileName(file));
         assertEquals("dir", ListedPaths.folderName(file, false));
         assertEquals("dir", ListedPaths.folderName(folder, true));
-        assertEquals("/", ListedPaths.folderName(Path.of("/file.txt"), false));
+        assertEquals(Path.of("/").toString(), ListedPaths.folderName(Path.of("/file.txt"), false));
+    }
+
+    @Test
+    void relativeFolderPathStripsTheFileName() {
+        Path root = Path.of("D:/data");
+        Path file = Path.of("D:/data/sub/dir/file.txt");
+        Path folder = Path.of("D:/data/sub/dir");
+        assertEquals("sub\\dir", ListedPaths.relativeFolderPath(root, file, false, true));
+        assertEquals("sub/dir", ListedPaths.relativeFolderPath(root, file, false, false));
+        assertEquals("sub\\dir", ListedPaths.relativeFolderPath(root, folder, true, true));
+        assertEquals("", ListedPaths.relativeFolderPath(root, Path.of("D:/data/file.txt"), false, true));
+        assertEquals("", ListedPaths.relativeFolderPath(root, root, true, true));
     }
 
     @Test
