@@ -222,7 +222,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             setSize(1100, 700);
             setLocationRelativeTo(null);
         }
-        setIconImage(((javax.swing.ImageIcon) Icons.forKind(EntryKind.DIRECTORY)).getImage());
+        setIconImages(Icons.appIcons());
         setJMenuBar(menu());
 
         split.setContinuousLayout(true);
