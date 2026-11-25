@@ -455,6 +455,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensions.setName("extensionFilter");
         extensions.setHistory(inputHistory.list(InputHistory.Bucket.EXTENSION));
         extensions.setOnDelete(value -> deleteHistory(InputHistory.Bucket.EXTENSION, value, extensions));
+        extensions.addActionListener(event -> {
+            if (SearchTriggers.enterInClosedField(event, extensions.isAdjusting(), extensions.isPopupVisible())) {
+                startSearch(true);
+            }
+        });
         includeFolders.setToolTipText(Messages.TIP_EXT_FOLDERS);
         includeFolders.setOpaque(false);
         includeFolders.setName("includeFolders");
@@ -981,6 +986,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         field.setName(name);
         field.setHistory(inputHistory.list(bucket));
         field.setOnDelete(value -> deleteHistory(bucket, value, field));
+        field.addActionListener(event -> {
+            if (SearchTriggers.enterInClosedField(event, field.isAdjusting(), field.isPopupVisible())) {
+                startSearch(true);
+            }
+        });
     }
 
     private void rememberPattern(HistoryField field, InputHistory.Bucket bucket) {
