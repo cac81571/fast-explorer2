@@ -70,6 +70,17 @@ public final class SearchService {
             Listener listener,
             ExtensionFilter filter
     ) {
+        search(root, query, cancelled, listener, filter, true);
+    }
+
+    public void search(
+            Path root,
+            String query,
+            BooleanSupplier cancelled,
+            Listener listener,
+            ExtensionFilter filter,
+            boolean includeSubfolders
+    ) {
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         String q = query == null ? "" : query.trim();
         if (q.isEmpty()) {
@@ -79,7 +90,7 @@ public final class SearchService {
         String rootKey = PathStrings.cacheKey(root);
         List<SearchHit> initial;
         try {
-            initial = cache.searchByName(rootKey, q, settings.searchMaxResults(), effective);
+            initial = cache.searchByName(rootKey, q, settings.searchMaxResults(), effective, includeSubfolders);
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "index search failed", e);
             initial = List.of();
@@ -124,7 +135,7 @@ public final class SearchService {
                 if (".".equals(child.name()) || "..".equals(child.name())) {
                     continue;
                 }
-                if (child.kind() == EntryKind.DIRECTORY) {
+                if (includeSubfolders && child.kind() == EntryKind.DIRECTORY) {
                     queue.addLast(dir.resolve(child.name()));
                 }
                 if (PathStrings.nameMatches(child.name(), q) && effective.accepts(child.name(), child.kind())) {
@@ -150,12 +161,23 @@ public final class SearchService {
             Listener listener,
             ExtensionFilter filter
     ) {
+        search(root, names, cancelled, listener, filter, true);
+    }
+
+    public void search(
+            Path root,
+            NameFilter names,
+            BooleanSupplier cancelled,
+            Listener listener,
+            ExtensionFilter filter,
+            boolean includeSubfolders
+    ) {
         NameFilter effectiveNames = names == null ? NameFilter.all() : names;
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         String rootKey = PathStrings.cacheKey(root);
         List<SearchHit> initial;
         try {
-            initial = cache.search(rootKey, effectiveNames, settings.searchMaxResults(), effective);
+            initial = cache.search(rootKey, effectiveNames, settings.searchMaxResults(), effective, includeSubfolders);
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "index search failed", e);
             initial = List.of();
@@ -201,7 +223,7 @@ public final class SearchService {
                 if (".".equals(child.name()) || "..".equals(child.name())) {
                     continue;
                 }
-                if (child.kind() == EntryKind.DIRECTORY) {
+                if (includeSubfolders && child.kind() == EntryKind.DIRECTORY) {
                     if (!effectiveNames.excludesDirectory(relative, child.name())) {
                         queue.addLast(dir.resolve(child.name()));
                     }

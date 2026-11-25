@@ -16,6 +16,8 @@ public final class Messages {
     public static final String GO = "移動";
     public static final String REFRESH = "更新";
     public static final String SEARCH = "検索";
+    public static final String SEARCH_SUBFOLDERS = "サブフォルダを検索する";
+    public static final String TIP_SEARCH_SUBFOLDERS = "オフにすると、いまのフォルダだけを検索します";
     public static final String CANCEL = "中止";
     public static final String THEME_DARK = "ダーク";
     public static final String THEME_LIGHT = "ライト";
@@ -149,7 +151,7 @@ public final class Messages {
     public static final String TIP_UP = "上のフォルダへ (Alt+↑ または Backspace)";
     public static final String TIP_REFRESH = "キャッシュを使わず再読込 (F5)";
     public static final String TIP_ADDRESS = "UNC パスまたはローカルパス (Ctrl+L)";
-    public static final String TIP_SEARCH = "現在のフォルダ以下を検索";
+    public static final String TIP_SEARCH = "検索を実行します";
     public static final String TIP_THEME = "ライトとダークを切り替え";
     public static final String TIP_CANCEL = "検索を中止してフォルダ一覧に戻る";
 

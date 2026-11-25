@@ -35,6 +35,7 @@ public final class AppConfig {
     private long fileCacheMaxMb = 2048;
     private int indexMaxDepth = 0;
     private boolean relativePaths = true;
+    private boolean searchSubfolders = true;
 
     private AppConfig(Path dataDir) {
         this.dataDir = dataDir;
@@ -77,6 +78,8 @@ public final class AppConfig {
             config.indexMaxDepth = (int) parseLong(properties, "index.max.depth", 0, 0, 1000);
             config.relativePaths = !"absolute".equalsIgnoreCase(
                     properties.getProperty("path.display", "relative").trim());
+            config.searchSubfolders = !"false".equalsIgnoreCase(
+                    properties.getProperty("search.subfolders", "true").trim());
         } else {
             try {
                 config.save();
@@ -136,6 +139,14 @@ public final class AppConfig {
 
     public void setRelativePaths(boolean relativePaths) {
         this.relativePaths = relativePaths;
+    }
+
+    public boolean searchSubfolders() {
+        return searchSubfolders;
+    }
+
+    public void setSearchSubfolders(boolean searchSubfolders) {
+        this.searchSubfolders = searchSubfolders;
     }
 
     public String lastPath() {
@@ -243,6 +254,9 @@ public final class AppConfig {
 
                 # 検索結果の場所。relative（検索を始めたフォルダから）または absolute
                 path.display=%s
+
+                # サブフォルダも検索する
+                search.subfolders=%s
                 """.formatted(
                 cacheTtlSeconds,
                 listingTimeoutSeconds,
@@ -257,7 +271,8 @@ public final class AppConfig {
                 fileCacheDir,
                 fileCacheMaxMb,
                 indexMaxDepth,
-                relativePaths ? "relative" : "absolute");
+                relativePaths ? "relative" : "absolute",
+                searchSubfolders);
         try (Writer writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
             writer.write(text);
         }

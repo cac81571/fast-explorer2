@@ -100,6 +100,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final JRadioButton pathRelative = new JRadioButton(Messages.PATH_RELATIVE);
     private final JRadioButton pathAbsolute = new JRadioButton(Messages.PATH_ABSOLUTE);
     private final JCheckBox includeFolders = new JCheckBox(Messages.EXT_INCLUDE_FOLDERS, true);
+    private final JCheckBox searchSubfolders = new JCheckBox(Messages.SEARCH_SUBFOLDERS, true);
     private final JButton back = new JButton(Messages.BACK);
     private final JButton forward = new JButton(Messages.FORWARD);
     private final JButton up = new JButton(Messages.UP);
@@ -357,6 +358,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         useArrow(forward, ArrowIcon.Dir.RIGHT, Messages.FORWARD);
         useArrow(up, ArrowIcon.Dir.UP, Messages.UP);
         address.setGrowHorizontally(true);
+        address.setAutoComplete(false);
         address.setPlaceholder(Messages.ADDRESS_PLACEHOLDER);
         address.setToolTipText(Messages.TIP_ADDRESS);
         address.setName("address");
@@ -430,6 +432,23 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         patternGrid.add(cancelSearch, buttons);
         addPattern(patternGrid, 1, 0, Messages.INCLUDE_DIR, includeDir);
         addPattern(patternGrid, 1, 2, Messages.EXCLUDE_DIR, excludeDir);
+        searchSubfolders.setToolTipText(Messages.TIP_SEARCH_SUBFOLDERS);
+        searchSubfolders.setOpaque(false);
+        searchSubfolders.setName("searchSubfolders");
+        searchSubfolders.setSelected(config.searchSubfolders());
+        searchSubfolders.addActionListener(e -> {
+            config.setSearchSubfolders(searchSubfolders.isSelected());
+            try {
+                config.save();
+            } catch (IOException ignored) {
+                // The choice still applies for this session.
+            }
+        });
+        GridBagConstraints subfolders = patternConstraints(4, 1, 0);
+        subfolders.gridwidth = 2;
+        subfolders.fill = GridBagConstraints.NONE;
+        subfolders.insets = new Insets(0, 4, 4, 0);
+        patternGrid.add(searchSubfolders, subfolders);
         JLabel extensionLabel = new JLabel(Messages.EXT_LABEL);
         extensions.setPlaceholder(Messages.EXT_PLACEHOLDER);
         extensions.setToolTipText(Messages.TIP_EXT);
@@ -1528,7 +1547,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             fillExtensionPresets();
         }
         activeSearchFilter = currentFilter();
-        controller.search(currentNames(), activeSearchFilter);
+        controller.search(currentNames(), activeSearchFilter, searchSubfolders.isSelected());
     }
 
     private void renderBrowse() {

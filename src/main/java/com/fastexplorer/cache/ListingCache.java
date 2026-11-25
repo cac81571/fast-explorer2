@@ -178,6 +178,16 @@ public final class ListingCache implements AutoCloseable {
      * before the filesystem is walked.
      */
     public List<SearchHit> searchByName(String rootKey, String query, int limit, ExtensionFilter filter) {
+        return searchByName(rootKey, query, limit, filter, true);
+    }
+
+    public List<SearchHit> searchByName(
+            String rootKey,
+            String query,
+            int limit,
+            ExtensionFilter filter,
+            boolean includeSubfolders
+    ) {
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         int capped = Math.max(1, Math.min(limit, 100_000));
         String pattern = PathStrings.toContainsLikePattern(query);
@@ -187,8 +197,12 @@ public final class ListingCache implements AutoCloseable {
                 SELECT dir_key, name, entry_kind, byte_size, modified_at
                 FROM file_entry
                 WHERE name_lower LIKE ? ESCAPE '\\'
-                  AND (dir_key = ? OR dir_key LIKE ? ESCAPE '\\')
                 """);
+        if (includeSubfolders) {
+            sql.append(" AND (dir_key = ? OR dir_key LIKE ? ESCAPE '\\')");
+        } else {
+            sql.append(" AND dir_key = ?");
+        }
         if (!extensions.isEmpty()) {
             sql.append(" AND (entry_kind <> 'DIRECTORY' AND ext IN (");
             for (int i = 0; i < extensions.size(); i++) {
@@ -211,7 +225,9 @@ public final class ListingCache implements AutoCloseable {
                 int index = 1;
                 ps.setString(index++, pattern);
                 ps.setString(index++, rootKey);
-                ps.setString(index++, childLike);
+                if (includeSubfolders) {
+                    ps.setString(index++, childLike);
+                }
                 for (String extension : extensions) {
                     ps.setString(index++, extension);
                 }
@@ -229,6 +245,16 @@ public final class ListingCache implements AutoCloseable {
      * in favor of an excluded folder such as {@code node_modules}.
      */
     public List<SearchHit> search(String rootKey, NameFilter names, int limit, ExtensionFilter filter) {
+        return search(rootKey, names, limit, filter, true);
+    }
+
+    public List<SearchHit> search(
+            String rootKey,
+            NameFilter names,
+            int limit,
+            ExtensionFilter filter,
+            boolean includeSubfolders
+    ) {
         NameFilter effectiveNames = names == null ? NameFilter.all() : names;
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         int capped = Math.max(1, Math.min(limit, 100_000));
@@ -241,8 +267,13 @@ public final class ListingCache implements AutoCloseable {
         StringBuilder sql = new StringBuilder("""
                 SELECT dir_key, name, entry_kind, byte_size, modified_at
                 FROM file_entry
-                WHERE (dir_key = ? OR dir_key LIKE ? ESCAPE '\\')
+                WHERE 
                 """);
+        if (includeSubfolders) {
+            sql.append("(dir_key = ? OR dir_key LIKE ? ESCAPE '\\')");
+        } else {
+            sql.append("dir_key = ?");
+        }
         if (!includeLikes.isEmpty() || !excludeLikes.isEmpty()) {
             sql.append(" AND (entry_kind = 'DIRECTORY' OR (");
             if (includeLikes.isEmpty()) {
@@ -284,7 +315,9 @@ public final class ListingCache implements AutoCloseable {
             try (PreparedStatement ps = connection.prepareStatement(sql.toString())) {
                 int index = 1;
                 ps.setString(index++, rootKey);
-                ps.setString(index++, childLike);
+                if (includeSubfolders) {
+                    ps.setString(index++, childLike);
+                }
                 for (String like : includeLikes) {
                     ps.setString(index++, like);
                 }

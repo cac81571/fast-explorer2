@@ -141,6 +141,21 @@ class SearchServiceTest {
     }
 
     @Test
+    void withoutSubfoldersOnlyTheRootDirectoryIsSearched() {
+        Path root = temp.resolve("root");
+        long fresh = System.currentTimeMillis();
+        cache.replace(PathStrings.cacheKey(root), List.of(
+                file("hit-root.txt"),
+                dir("sub")), fresh, true);
+        Recording listener = new Recording();
+        service().search(root, "hit", () -> false, listener, ExtensionFilter.all(), false);
+        assertTrue(listener.cacheNames.contains("hit-root.txt"));
+        assertTrue(listener.updatedNames.stream().noneMatch(name -> name.equals("hit-sub.txt")));
+        assertTrue(listed.stream().noneMatch(path -> path.getFileName().toString().equals("sub")));
+        assertTrue(listener.finished);
+    }
+
+    @Test
     void excludedDirectoriesAreNotWalked() {
         Path root = temp.resolve("root");
         long fresh = System.currentTimeMillis();

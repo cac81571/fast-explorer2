@@ -27,6 +27,8 @@ public final class HistoryField extends JComboBox<String> {
     private final JTextField editor;
     private boolean adjusting;
     private boolean growHorizontally;
+    private boolean autoComplete = true;
+    private boolean completeAfterTyping;
     private List<String> history = List.of();
     private Consumer<String> onDelete = value -> {
     };
@@ -38,7 +40,8 @@ public final class HistoryField extends JComboBox<String> {
         editor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
             public void insertUpdate(javax.swing.event.DocumentEvent event) {
-                completeFromHistory();
+                // Document must not be mutated inside the listener notification.
+                SwingUtilities.invokeLater(HistoryField.this::completeFromHistory);
             }
 
             @Override
@@ -48,10 +51,17 @@ public final class HistoryField extends JComboBox<String> {
 
             @Override
             public void changedUpdate(javax.swing.event.DocumentEvent event) {
-                completeFromHistory();
+                SwingUtilities.invokeLater(HistoryField.this::completeFromHistory);
             }
         });
         editor.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent event) {
+                if (!Character.isISOControl(event.getKeyChar())) {
+                    completeAfterTyping = true;
+                }
+            }
+
             @Override
             public void keyPressed(KeyEvent event) {
                 if (event.getKeyCode() == KeyEvent.VK_DELETE && isPopupVisible()) {
@@ -98,6 +108,11 @@ public final class HistoryField extends JComboBox<String> {
 
     public void setGrowHorizontally(boolean growHorizontally) {
         this.growHorizontally = growHorizontally;
+    }
+
+    /** When false, history is only offered in the dropdown (no inline completion). */
+    public void setAutoComplete(boolean autoComplete) {
+        this.autoComplete = autoComplete;
     }
 
     @Override
@@ -161,22 +176,31 @@ public final class HistoryField extends JComboBox<String> {
     }
 
     private void completeFromHistory() {
-        if (adjusting) {
+        if (!autoComplete || adjusting || !completeAfterTyping) {
+            completeAfterTyping = false;
             return;
         }
+        completeAfterTyping = false;
         String typed = editor.getText();
         if (typed.isEmpty()) {
             return;
         }
         for (String candidate : history) {
-            if (candidate.length() > typed.length() && candidate.regionMatches(true, 0, typed, 0, typed.length())) {
-                adjusting = true;
-                editor.setText(candidate);
-                editor.setCaretPosition(candidate.length());
-                editor.moveCaretPosition(typed.length());
-                adjusting = false;
-                return;
+            if (candidate.length() <= typed.length()
+                    || !candidate.regionMatches(true, 0, typed, 0, typed.length())) {
+                continue;
             }
+            char next = candidate.charAt(typed.length());
+            // Do not extend a finished folder path into a longer history entry.
+            if (next == '\\' || next == '/') {
+                continue;
+            }
+            adjusting = true;
+            editor.setText(candidate);
+            editor.setCaretPosition(candidate.length());
+            editor.moveCaretPosition(typed.length());
+            adjusting = false;
+            return;
         }
     }
 
