@@ -46,8 +46,6 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.TransferHandler;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
@@ -108,20 +106,9 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final JLabel error = new JLabel(" ");
     private final JLabel status = new JLabel(Messages.LOADING);
     private final FileTableModel model = new FileTableModel();
-    private final JTable table = new JTable(model) {
-        @Override
-        public String getToolTipText(MouseEvent event) {
-            int view = rowAtPoint(event.getPoint());
-            if (view < 0) {
-                return null;
-            }
-            int modelRow = convertRowIndexToModel(view);
-            if (modelRow < 0) {
-                return null;
-            }
-            return ListedPaths.fullDisplay(MainFrame.this.model.rowAt(modelRow).path());
-        }
-    };
+    private final FileTableModel searchModel = new FileTableModel();
+    private final JTable table = createFileTable(model);
+    private final JTable searchTable = createFileTable(searchModel);
     private final JMenuItem darkItem = new JMenuItem(Messages.MENU_TOGGLE_THEME);
     private final FavoritesPanel favorites;
     private final JSplitPane split;
@@ -240,8 +227,10 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         root.add(split, BorderLayout.CENTER);
         root.add(statusBar(), BorderLayout.SOUTH);
         setContentPane(root);
-        configureTable();
+        configureTable(table, model, "fileTable", false);
+        configureTable(searchTable, searchModel, "searchTable", true);
         tabs.addTab(Messages.TAB_LIST, new JScrollPane(table));
+        tabs.addTab(Messages.TAB_SEARCH, new JScrollPane(searchTable));
         tabs.addTab(Messages.TAB_INDEX, indexPanel);
         tabs.setName("mainTabs");
         split.setRightComponent(tabs);
@@ -437,30 +426,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensions.setName("extensionFilter");
         extensions.setHistory(inputHistory.list(InputHistory.Bucket.EXTENSION));
         extensions.setOnDelete(value -> deleteHistory(InputHistory.Bucket.EXTENSION, value, extensions));
-        extensions.addActionListener(event -> {
-            if (SearchTriggers.enterInClosedField(event, extensions.isAdjusting(), extensions.isPopupVisible())) {
-                commitExtensionField();
-            }
-        });
-        extensions.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) {
-                refreshBrowseFilterOnly();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent event) {
-                refreshBrowseFilterOnly();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent event) {
-                refreshBrowseFilterOnly();
-            }
-        });
         includeFolders.setToolTipText(Messages.TIP_EXT_FOLDERS);
         includeFolders.setOpaque(false);
-        includeFolders.addActionListener(e -> refreshBrowseFilterOnly());
         fillExtensionPresets();
         extensionPreset.setName("extensionPreset");
         extensionPreset.addActionListener(e -> applyExtensionPreset());
@@ -500,35 +467,53 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         return bar;
     }
 
-    private void configureTable() {
-        table.setFillsViewportHeight(true);
-        table.setShowVerticalLines(false);
-        table.setShowHorizontalLines(true);
-        table.setIntercellSpacing(new Dimension(0, 1));
-        table.setRowHeight(28);
-        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
-        table.setName("fileTable");
+    private JTable createFileTable(FileTableModel tableModel) {
+        return new JTable(tableModel) {
+            @Override
+            public String getToolTipText(MouseEvent event) {
+                int view = rowAtPoint(event.getPoint());
+                if (view < 0) {
+                    return null;
+                }
+                int modelRow = convertRowIndexToModel(view);
+                if (modelRow < 0) {
+                    return null;
+                }
+                return ListedPaths.fullDisplay(tableModel.rowAt(modelRow).path());
+            }
+        };
+    }
 
-        TableRowSorter<FileTableModel> sorter = new TableRowSorter<>(model);
+    private void configureTable(JTable target, FileTableModel tableModel, String name, boolean showLocation) {
+        target.setFillsViewportHeight(true);
+        target.setShowVerticalLines(false);
+        target.setShowHorizontalLines(true);
+        target.setIntercellSpacing(new Dimension(0, 1));
+        target.setRowHeight(28);
+        target.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        target.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+        target.setName(name);
+
+        TableRowSorter<FileTableModel> sorter = new TableRowSorter<>(tableModel);
         sorter.setComparator(0, FileRow.BY_NAME);
         sorter.setComparator(1, String.CASE_INSENSITIVE_ORDER);
         sorter.setComparator(3, (Long left, Long right) -> Long.compare(left, right));
         sorter.setComparator(4, (Long left, Long right) -> Long.compare(left, right));
         sorter.setSortKeys(List.of(new javax.swing.RowSorter.SortKey(0, javax.swing.SortOrder.ASCENDING)));
-        table.setRowSorter(sorter);
+        target.setRowSorter(sorter);
 
-        table.setDefaultRenderer(FileRow.class, new NameRenderer());
-        table.setDefaultRenderer(Long.class, new NumberRenderer());
+        target.setDefaultRenderer(FileRow.class, new NameRenderer());
+        target.setDefaultRenderer(Long.class, new NumberRenderer());
 
-        table.getColumnModel().getColumn(0).setPreferredWidth(420);
-        table.getColumnModel().getColumn(2).setPreferredWidth(90);
-        table.getColumnModel().getColumn(3).setPreferredWidth(110);
-        table.getColumnModel().getColumn(4).setPreferredWidth(160);
-        setLocationColumnVisible(false);
+        target.getColumnModel().getColumn(0).setPreferredWidth(420);
+        target.getColumnModel().getColumn(1).setPreferredWidth(showLocation ? 280 : 0);
+        target.getColumnModel().getColumn(2).setPreferredWidth(90);
+        target.getColumnModel().getColumn(3).setPreferredWidth(110);
+        target.getColumnModel().getColumn(4).setPreferredWidth(160);
+        setLocationColumnVisible(target, showLocation);
 
-        table.setDragEnabled(true);
-        table.setTransferHandler(new TransferHandler() {
+        target.setDragEnabled(true);
+        target.setTransferHandler(new TransferHandler() {
             @Override
             public int getSourceActions(JComponent component) {
                 return COPY;
@@ -536,18 +521,18 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
             @Override
             protected java.awt.datatransfer.Transferable createTransferable(JComponent component) {
-                FileRow row = selectedFileRow();
+                FileRow row = selectedFileRow(target);
                 if (row == null || row.kind() != EntryKind.DIRECTORY) {
                     return null;
                 }
                 return new StringSelection(row.path().toString());
             }
         });
-        table.addMouseListener(new MouseAdapter() {
+        target.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
-                    openSelected();
+                    openSelected(target);
                 }
             }
 
@@ -565,19 +550,19 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
                 if (!e.isPopupTrigger()) {
                     return;
                 }
-                int row = table.rowAtPoint(e.getPoint());
-                if (row >= 0 && !table.isRowSelected(row)) {
-                    table.setRowSelectionInterval(row, row);
+                int row = target.rowAtPoint(e.getPoint());
+                if (row >= 0 && !target.isRowSelected(row)) {
+                    target.setRowSelectionInterval(row, row);
                 }
-                showContextMenu(table, e.getX(), e.getY(), selectedFileRow());
+                showContextMenu(target, e.getX(), e.getY(), selectedFileRow(target));
             }
         });
-        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+        target.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "open-row");
-        table.getActionMap().put("open-row", new AbstractAction() {
+        target.getActionMap().put("open-row", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                openSelected();
+                openSelected(target);
             }
         });
     }
@@ -591,14 +576,16 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         bind(root, actions, "refresh", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), () -> controller.refresh());
         bind(root, actions, "address", KeyStroke.getKeyStroke(KeyEvent.VK_L, KeyEvent.CTRL_DOWN_MASK), () -> address.focusEditor(true));
         bind(root, actions, "find", KeyStroke.getKeyStroke(KeyEvent.VK_F, KeyEvent.CTRL_DOWN_MASK), () -> includeFile.focusEditor(true));
-        table.getInputMap(JComponent.WHEN_FOCUSED)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "up-folder");
-        table.getActionMap().put("up-folder", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                controller.up();
-            }
-        });
+        for (JTable fileTable : List.of(table, searchTable)) {
+            fileTable.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "up-folder");
+            fileTable.getActionMap().put("up-folder", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    controller.up();
+                }
+            });
+        }
     }
 
     private static void bind(
@@ -628,24 +615,32 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         }
     }
 
-    private void openSelected() {
-        FileRow row = selectedFileRow();
+    private void openSelected(JTable source) {
+        FileRow row = selectedFileRow(source);
         if (row == null) {
             return;
         }
         controller.activate(row.path(), row.kind());
     }
 
-    private FileRow selectedFileRow() {
-        int view = table.getSelectedRow();
+    private JTable activeFileTable() {
+        return tabs.getSelectedIndex() == 1 ? searchTable : table;
+    }
+
+    private FileTableModel modelOf(JTable source) {
+        return source == searchTable ? searchModel : model;
+    }
+
+    private FileRow selectedFileRow(JTable source) {
+        int view = source.getSelectedRow();
         if (view < 0) {
             return null;
         }
-        return model.rowAt(table.convertRowIndexToModel(view));
+        return modelOf(source).rowAt(source.convertRowIndexToModel(view));
     }
 
     private void addSelectedFavorite() {
-        FileRow row = selectedFileRow();
+        FileRow row = selectedFileRow(activeFileTable());
         if (row == null || row.kind() != EntryKind.DIRECTORY) {
             return;
         }
@@ -679,6 +674,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         updateThemeButton();
         subtitle.setFont(Theme.baseFont());
         table.setRowHeight(28);
+        searchTable.setRowHeight(28);
     }
 
     private void updateThemeButton() {
@@ -739,8 +735,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         error.setText(" ");
     }
 
-    private void setLocationColumnVisible(boolean visible) {
-        TableColumn column = table.getColumn(Messages.COL_LOCATION);
+    private void setLocationColumnVisible(JTable target, boolean visible) {
+        TableColumn column = target.getColumn(Messages.COL_LOCATION);
         if (visible) {
             column.setMinWidth(80);
             column.setMaxWidth(4000);
@@ -755,7 +751,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private void showListing(Path directory, List<FileEntry> entries, LoadStatus loadStatus) {
         searchMode = false;
         cancelSearch.setEnabled(false);
-        setLocationColumnVisible(false);
         clearBanner();
         String parent = directory.toString();
         List<FileRow> rows = entries.stream()
@@ -813,7 +808,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (rows.size() > cap) {
             rows = rows.subList(0, cap);
         }
-        model.setRows(rows);
+        searchModel.setRows(rows);
         String detail;
         if (done) {
             detail = Messages.SEARCH_DONE + " · 走査 " + searchScanned + " フォルダ";
@@ -868,7 +863,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             indexer.start(controller.currentPath(), 0);
         }
         javax.swing.Timer indexShot = new javax.swing.Timer(1200, e -> {
-            tabs.setSelectedIndex(1);
+            tabs.setSelectedComponent(indexPanel);
             refreshIndex();
             Path indexFile = screenshotFile.resolveSibling(
                     screenshotFile.getFileName().toString().replace(".png", "") + "-index.png");
@@ -940,11 +935,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         field.setName(name);
         field.setHistory(inputHistory.list(bucket));
         field.setOnDelete(value -> deleteHistory(bucket, value, field));
-        field.addActionListener(event -> {
-            if (SearchTriggers.enterInClosedField(event, field.isAdjusting(), field.isPopupVisible())) {
-                startSearch(true);
-            }
-        });
     }
 
     private void rememberPattern(HistoryField field, InputHistory.Bucket bucket) {
@@ -999,11 +989,13 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     }
 
     private List<FileRow> selectedRows() {
+        JTable source = activeFileTable();
+        FileTableModel tableModel = modelOf(source);
         List<FileRow> rows = new ArrayList<>();
-        for (int view : table.getSelectedRows()) {
-            int modelRow = table.convertRowIndexToModel(view);
+        for (int view : source.getSelectedRows()) {
+            int modelRow = source.convertRowIndexToModel(view);
             if (modelRow >= 0) {
-                rows.add(model.rowAt(modelRow));
+                rows.add(tableModel.rowAt(modelRow));
             }
         }
         return rows;
@@ -1380,12 +1372,17 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         }
     }
 
+    private void showSearchTab() {
+        if (tabs.getTabCount() > 1) {
+            tabs.setSelectedIndex(1);
+        }
+    }
+
     @Override
     public void onLoadStarted(Path directory) {
         showListTab();
         searchMode = false;
         cancelSearch.setEnabled(false);
-        setLocationColumnVisible(false);
         clearBanner();
         status.setText(Messages.LOADING);
         setTitle(Messages.APP_NAME + " — " + directory);
@@ -1414,7 +1411,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     public void onError(String message, boolean keepRows) {
         showBanner(message);
         if (!keepRows) {
-            model.setRows(List.of());
+            if (searchMode) {
+                searchModel.setRows(List.of());
+            } else {
+                model.setRows(List.of());
+            }
         }
         if (!searchMode) {
             status.setText(message);
@@ -1436,8 +1437,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         searchScanned = 0;
         searchErrors = 0;
         searchHits.clear();
-        model.setRows(List.of());
-        setLocationColumnVisible(true);
+        searchModel.setRows(List.of());
+        showSearchTab();
         cancelSearch.setEnabled(true);
         clearBanner();
         status.setText(Messages.SEARCHING);
@@ -1482,7 +1483,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     }
 
     private void startSearch(boolean remember) {
-        showListTab();
+        showSearchTab();
         if (remember) {
             rememberPattern(includeFile, InputHistory.Bucket.INCLUDE_FILE);
             rememberPattern(excludeFile, InputHistory.Bucket.EXCLUDE_FILE);
@@ -1501,28 +1502,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         controller.search(currentNames(), currentFilter());
     }
 
-    /** Client-side filter of the current folder list. Does not start a search. */
-    private void refreshBrowseFilterOnly() {
-        if (suppressExtensionEvents || searchMode) {
-            return;
-        }
-        renderBrowse();
-    }
-
-    private void commitExtensionField() {
-        if (searchMode) {
-            startSearch(true);
-        } else {
-            renderBrowse();
-        }
-    }
-
     private void renderBrowse() {
-        ExtensionFilter filter = currentFilter();
-        List<FileRow> visible = browseRows.stream()
-                .filter(row -> filter.accepts(row.name(), row.kind()))
-                .toList();
-        model.setRows(visible);
+        model.setRows(browseRows);
         String source = switch (browseStatus.origin()) {
             case CACHE -> Messages.SOURCE_CACHE;
             case REFRESHING -> Messages.SOURCE_REFRESHING;
@@ -1530,15 +1511,9 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             case SEARCH -> Messages.SOURCE_SEARCH;
         };
         String detail = browseStatus.detail();
-        String filterText = filter.describe();
-        if (!filterText.isEmpty()) {
-            detail = detail == null || detail.isEmpty() ? filterText : detail + " · " + filterText;
-        }
-        String line = Messages.items(visible.size(), browseStatus.elapsedMillis(), source, detail);
+        String line = Messages.items(browseRows.size(), browseStatus.elapsedMillis(), source, detail);
         if (browseRows.isEmpty() && browseStatus.origin() != LoadStatus.Origin.REFRESHING) {
             line += " · " + Messages.EMPTY_FOLDER;
-        } else if (visible.isEmpty() && !browseRows.isEmpty()) {
-            line += " · " + Messages.NO_HITS;
         }
         status.setText(line);
     }
@@ -1559,7 +1534,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         suppressExtensionEvents = true;
         extensions.setText(value);
         suppressExtensionEvents = false;
-        refreshBrowseFilterOnly();
     }
 
     private String presetValue(String selected) {
