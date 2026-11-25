@@ -78,6 +78,7 @@ public final class FavoritesPanel extends JPanel {
         view.setShowsRootHandles(true);
         view.setRowHeight(26);
         view.setCellRenderer(renderer);
+        applyTreeSelectionStyle();
         view.setDragEnabled(true);
         view.setDropMode(DropMode.ON_OR_INSERT);
         view.setTransferHandler(new FavoriteTransfer());
@@ -85,6 +86,10 @@ public final class FavoritesPanel extends JPanel {
         view.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent event) {
+                TreePath path = pathAt(event.getX(), event.getY());
+                if (path != null) {
+                    view.setSelectionPath(path);
+                }
                 showPopup(event);
             }
 
@@ -181,6 +186,22 @@ public final class FavoritesPanel extends JPanel {
     public void restyle() {
         view.setRowHeight(26);
         view.setCellRenderer(renderer);
+        applyTreeSelectionStyle();
+    }
+
+    private void applyTreeSelectionStyle() {
+        view.putClientProperty(FlatClientProperties.TREE_WIDE_SELECTION, true);
+        // Keep the focused (blue) selection look even after focus moves to the file table.
+        java.util.Map<String, Object> style = new java.util.HashMap<>();
+        java.awt.Color background = javax.swing.UIManager.getColor("Tree.selectionBackground");
+        java.awt.Color foreground = javax.swing.UIManager.getColor("Tree.selectionForeground");
+        if (background != null) {
+            style.put("selectionInactiveBackground", background);
+        }
+        if (foreground != null) {
+            style.put("selectionInactiveForeground", foreground);
+        }
+        view.putClientProperty(FlatClientProperties.STYLE, style);
     }
 
     private JPanel header() {
@@ -361,7 +382,7 @@ public final class FavoritesPanel extends JPanel {
         if (!event.isPopupTrigger()) {
             return;
         }
-        TreePath path = view.getPathForLocation(event.getX(), event.getY());
+        TreePath path = pathAt(event.getX(), event.getY());
         if (path != null) {
             view.setSelectionPath(path);
         }
@@ -497,8 +518,21 @@ public final class FavoritesPanel extends JPanel {
     }
 
     private FavoriteNode nodeAt(int x, int y) {
-        TreePath path = view.getPathForLocation(x, y);
+        TreePath path = pathAt(x, y);
         return path == null ? null : nodeOf(path);
+    }
+
+    /** Hit-test the full row, not just the label width. */
+    private TreePath pathAt(int x, int y) {
+        TreePath path = view.getClosestPathForLocation(x, y);
+        if (path == null) {
+            return null;
+        }
+        java.awt.Rectangle bounds = view.getPathBounds(path);
+        if (bounds == null || y < bounds.y || y >= bounds.y + bounds.height) {
+            return null;
+        }
+        return path;
     }
 
     private static FavoriteNode nodeOf(TreePath path) {
