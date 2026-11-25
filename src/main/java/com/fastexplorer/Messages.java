@@ -89,6 +89,7 @@ public final class Messages {
     public static final String TAB_LIST = "一覧";
     public static final String TAB_SEARCH = "検索";
     public static final String TAB_INDEX = "インデックス";
+    public static final String TIP_CLOSE_TAB = "タブを閉じる";
 
     public static final String OPEN_IN_EXPLORER = "エクスプローラーで開く";
     public static final String REVEAL_IN_EXPLORER = "ファイルの場所をエクスプローラーで開く";

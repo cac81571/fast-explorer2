@@ -82,6 +82,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.IntConsumer;
 
 public final class MainFrame extends JFrame implements ExplorerController.Listener {
     private final AppConfig config;
@@ -110,26 +111,20 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final JLabel error = new JLabel(" ");
     private final JLabel status = new JLabel(Messages.LOADING);
     private final FileTableModel model = new FileTableModel();
-    private final FileTableModel searchModel = new FileTableModel();
     private final JTable table = createFileTable(model);
-    private final JTable searchTable = createFileTable(searchModel);
     private final JMenuItem darkItem = new JMenuItem(Messages.MENU_TOGGLE_THEME);
     private final FavoritesPanel favorites;
     private final JSplitPane split;
     private final javax.swing.Timer dividerSaver;
     private final javax.swing.Timer searchRenderTimer;
 
-    private final List<SearchHit> searchHits = new ArrayList<>();
     private List<FileRow> browseRows = List.of();
     private LoadStatus browseStatus = new LoadStatus(0, 0, LoadStatus.Origin.FILESYSTEM, "");
+    private SearchResultTab activeSearch;
+    private ExtensionFilter pendingSearchFilter = ExtensionFilter.all();
+    private int searchTabSeq;
     private boolean searchMode;
-    private ExtensionFilter activeSearchFilter = ExtensionFilter.all();
-    private long searchElapsed;
-    private boolean searchFinished;
-    private boolean searchTableDirty;
     private boolean dark;
-    private int searchScanned;
-    private int searchErrors;
     private boolean captureScheduled;
     private boolean screenshotSearchStarted;
     private boolean suppressExtensionEvents;
@@ -173,8 +168,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         this.dividerSaver = new javax.swing.Timer(400, event -> saveDivider());
         this.dividerSaver.setRepeats(false);
         this.searchRenderTimer = new javax.swing.Timer(300, event -> {
-            if (searchMode && searchTableDirty) {
-                renderSearch(searchElapsed, searchFinished);
+            if (searchMode && activeSearch != null && activeSearch.dirty()) {
+                renderActiveSearch(false);
             }
         });
         this.searchRenderTimer.setRepeats(true);
@@ -242,11 +237,12 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         root.add(statusBar(), BorderLayout.SOUTH);
         setContentPane(root);
         configureTable(table, model, "fileTable", false);
-        configureTable(searchTable, searchModel, "searchTable", true);
         tabs.addTab(Messages.TAB_LIST, new JScrollPane(table));
-        tabs.addTab(Messages.TAB_SEARCH, new JScrollPane(searchTable));
         tabs.addTab(Messages.TAB_INDEX, indexPanel);
         tabs.setName("mainTabs");
+        tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_CLOSE_CALLBACK,
+                (IntConsumer) this::closeSearchTabAt);
+        tabs.addChangeListener(e -> refreshStatusForSelectedTab());
         split.setRightComponent(tabs);
         installKeys();
         tuneFields();
@@ -421,9 +417,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             } catch (IOException ignored) {
                 // The choice still applies for this session.
             }
-            if (searchMode) {
-                renderSearch(searchElapsed, searchFinished);
-            }
+            rerenderAllSearchTabs();
         };
         pathRelative.addActionListener(pathDisplayListener);
         pathAbsolute.addActionListener(pathDisplayListener);
@@ -633,16 +627,18 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         bind(root, actions, "refresh", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), () -> controller.refresh());
         bind(root, actions, "address", KeyStroke.getKeyStroke(KeyEvent.VK_L, KeyEvent.CTRL_DOWN_MASK), () -> address.focusEditor(true));
         bind(root, actions, "find", KeyStroke.getKeyStroke(KeyEvent.VK_F, KeyEvent.CTRL_DOWN_MASK), () -> includeFile.focusEditor(true));
-        for (JTable fileTable : List.of(table, searchTable)) {
-            fileTable.getInputMap(JComponent.WHEN_FOCUSED)
-                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "up-folder");
-            fileTable.getActionMap().put("up-folder", new AbstractAction() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    controller.up();
-                }
-            });
-        }
+        installTableUpKey(table);
+    }
+
+    private void installTableUpKey(JTable fileTable) {
+        fileTable.getInputMap(JComponent.WHEN_FOCUSED)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "up-folder");
+        fileTable.getActionMap().put("up-folder", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                controller.up();
+            }
+        });
     }
 
     private static void bind(
@@ -681,11 +677,17 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     }
 
     private JTable activeFileTable() {
-        return tabs.getSelectedIndex() == 1 ? searchTable : table;
+        SearchResultTab selected = selectedSearchTab();
+        return selected != null ? selected.table() : table;
     }
 
     private FileTableModel modelOf(JTable source) {
-        return source == searchTable ? searchModel : model;
+        SearchResultTab tab = SearchResultTab.fromComponent(source);
+        return tab != null ? tab.model() : model;
+    }
+
+    private SearchResultTab selectedSearchTab() {
+        return SearchResultTab.fromComponent(tabs.getSelectedComponent());
     }
 
     private FileRow selectedFileRow(JTable source) {
@@ -731,7 +733,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         updateThemeButton();
         subtitle.setFont(Theme.baseFont());
         table.setRowHeight(28);
-        searchTable.setRowHeight(28);
+        forEachSearchTab(tab -> tab.table().setRowHeight(28));
     }
 
     private void updateThemeButton() {
@@ -848,62 +850,93 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         }
     }
 
-    private void renderSearch(long elapsedMillis, boolean done) {
-        searchElapsed = elapsedMillis;
-        searchFinished = done;
-        searchTableDirty = false;
+    private void renderActiveSearch(boolean done) {
+        if (activeSearch == null) {
+            return;
+        }
+        if (done) {
+            activeSearch.finish(activeSearch.scanned(), activeSearch.errors(), activeSearch.elapsed());
+        }
+        activeSearch.renderTable(
+                controller.currentPath(),
+                config.relativePaths(),
+                config.settings().searchMaxResults());
+        if (selectedSearchTab() == activeSearch || tabs.getSelectedComponent() == activeSearch.scroll()) {
+            status.setText(activeSearch.statusLine(config.settings().searchMaxResults()));
+        }
+    }
+
+    private void rerenderAllSearchTabs() {
+        int cap = config.settings().searchMaxResults();
         Path root = controller.currentPath();
         boolean relative = config.relativePaths();
-        List<FileRow> rows = searchHits.stream()
-                .map(hit -> new FileRow(
-                        hit.name(),
-                        locationText(root, hit.path(), relative),
-                        hit.kind(),
-                        hit.size(),
-                        hit.modifiedEpochMillis(),
-                        hit.path()))
-                .sorted(FileRow.BY_NAME)
-                .toList();
-        int cap = config.settings().searchMaxResults();
-        if (rows.size() > cap) {
-            rows = rows.subList(0, cap);
-        }
-        searchModel.setRows(rows);
-        renderSearchStatus(rows.size(), elapsedMillis, done);
+        forEachSearchTab(tab -> tab.renderTable(root, relative, cap));
+        refreshStatusForSelectedTab();
     }
 
-    private void renderSearchStatus(long elapsedMillis, boolean done) {
-        renderSearchStatus(Math.min(searchHits.size(), config.settings().searchMaxResults()), elapsedMillis, done);
+    private void refreshStatusForSelectedTab() {
+        SearchResultTab selected = selectedSearchTab();
+        if (selected != null) {
+            status.setText(selected.statusLine(config.settings().searchMaxResults()));
+            return;
+        }
+        if (tabs.getSelectedComponent() == indexPanel) {
+            return;
+        }
+        if (!searchMode) {
+            renderBrowse();
+        }
     }
 
-    private void renderSearchStatus(int rowCount, long elapsedMillis, boolean done) {
-        String detail;
-        if (done) {
-            detail = Messages.SEARCH_DONE + " · 走査 " + searchScanned + " フォルダ";
-        } else if (searchScanned == 0) {
-            detail = Messages.SEARCH_FROM_CACHE;
-        } else {
-            detail = Messages.SEARCH_FROM_CACHE + " · 走査 " + searchScanned + " フォルダ";
+    private void forEachSearchTab(java.util.function.Consumer<SearchResultTab> action) {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            SearchResultTab tab = SearchResultTab.fromComponent(tabs.getComponentAt(i));
+            if (tab != null) {
+                action.accept(tab);
+            }
         }
-        if (searchErrors > 0) {
-            detail += " · 失敗 " + searchErrors;
-        }
-        String filterText = activeSearchFilter.describe();
-        if (!filterText.isEmpty()) {
-            detail += " · " + filterText;
-        }
-        String line = Messages.items(rowCount, elapsedMillis, Messages.SOURCE_SEARCH, detail);
-        if (done && rowCount == 0) {
-            line += " · " + Messages.NO_HITS;
-        }
-        status.setText(line);
     }
 
-    private void capSearchHits() {
-        int cap = config.settings().searchMaxResults();
-        if (searchHits.size() > cap) {
-            searchHits.subList(cap, searchHits.size()).clear();
+    private SearchResultTab openNewSearchTab() {
+        searchTabSeq++;
+        String title = Messages.TAB_SEARCH + " " + searchTabSeq;
+        FileTableModel tabModel = new FileTableModel();
+        JTable tabTable = createFileTable(tabModel);
+        configureTable(tabTable, tabModel, "searchTable-" + searchTabSeq, true);
+        installTableUpKey(tabTable);
+        JScrollPane scroll = new JScrollPane(tabTable);
+        scroll.putClientProperty(
+                FlatClientProperties.TABBED_PANE_TAB_CLOSE_TOOLTIPTEXT,
+                Messages.TIP_CLOSE_TAB);
+        SearchResultTab tab = new SearchResultTab(tabModel, tabTable, scroll, title);
+        int insertAt = tabs.indexOfComponent(indexPanel);
+        if (insertAt < 0) {
+            insertAt = tabs.getTabCount();
         }
+        tabs.insertTab(title, null, scroll, null, insertAt);
+        tabs.setSelectedComponent(scroll);
+        return tab;
+    }
+
+    private void closeSearchTabAt(int index) {
+        if (index < 0 || index >= tabs.getTabCount()) {
+            return;
+        }
+        SearchResultTab tab = SearchResultTab.fromComponent(tabs.getComponentAt(index));
+        if (tab == null) {
+            return;
+        }
+        if (tab == activeSearch && searchMode && !tab.finished()) {
+            controller.cancel();
+            searchMode = false;
+            searchRenderTimer.stop();
+            cancelSearch.setEnabled(false);
+            status.setText(Messages.CANCELLED);
+        }
+        if (tab == activeSearch) {
+            activeSearch = null;
+        }
+        tabs.removeTabAt(index);
     }
 
     private void maybeCapture(LoadStatus loadStatus) {
@@ -1052,13 +1085,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
                 excludeFile.getText(),
                 includeDir.getText(),
                 excludeDir.getText());
-    }
-
-    private static String locationText(Path root, Path path, boolean relative) {
-        if (relative && root != null) {
-            return ListedPaths.relativeDisplay(root, path, PathStrings.isWindows());
-        }
-        return ListedPaths.fullDisplay(path);
     }
 
     private List<FileRow> selectedRows() {
@@ -1251,9 +1277,14 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             // Invalidate first so already-queued UI updates become no-ops, then refresh the listing.
             controller.cancel();
             searchRenderTimer.stop();
-            searchTableDirty = false;
             searchMode = false;
-            searchFinished = true;
+            if (activeSearch != null) {
+                activeSearch.markCancelled();
+                activeSearch.renderTable(
+                        controller.currentPath(),
+                        config.relativePaths(),
+                        config.settings().searchMaxResults());
+            }
             cancelSearch.setEnabled(false);
             status.setText(Messages.CANCELLED);
             controller.cancelAndReload();
@@ -1462,17 +1493,13 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         }
     }
 
-    private void showSearchTab() {
-        if (tabs.getTabCount() > 1) {
-            tabs.setSelectedIndex(1);
-        }
-    }
-
     @Override
     public void onLoadStarted(Path directory) {
         showListTab();
+        if (searchMode && activeSearch != null) {
+            activeSearch.markCancelled();
+        }
         searchMode = false;
-        searchTableDirty = false;
         searchRenderTimer.stop();
         cancelSearch.setEnabled(false);
         clearBanner();
@@ -1503,8 +1530,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     public void onError(String message, boolean keepRows) {
         showBanner(message);
         if (!keepRows) {
-            if (searchMode) {
-                searchModel.setRows(List.of());
+            if (searchMode && activeSearch != null) {
+                activeSearch.model().setRows(List.of());
             } else {
                 model.setRows(List.of());
             }
@@ -1525,14 +1552,12 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
     @Override
     public void onSearchStarted(String query) {
+        if (searchMode && activeSearch != null && !activeSearch.finished()) {
+            activeSearch.markCancelled();
+        }
+        activeSearch = openNewSearchTab();
+        activeSearch.reset(pendingSearchFilter);
         searchMode = true;
-        searchScanned = 0;
-        searchErrors = 0;
-        searchHits.clear();
-        searchModel.setRows(List.of());
-        searchTableDirty = false;
-        searchFinished = false;
-        showSearchTab();
         cancelSearch.setEnabled(true);
         clearBanner();
         status.setText(Messages.SEARCHING);
@@ -1543,52 +1568,40 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
     @Override
     public void onSearchHits(List<SearchHit> cacheHits, long elapsedMillis) {
-        if (!searchMode) {
+        if (!searchMode || activeSearch == null) {
             return;
         }
-        searchHits.clear();
-        searchHits.addAll(cacheHits);
-        capSearchHits();
-        searchElapsed = elapsedMillis;
-        searchFinished = false;
-        searchTableDirty = true;
-        renderSearchStatus(elapsedMillis, false);
+        activeSearch.replaceHits(cacheHits, elapsedMillis, config.settings().searchMaxResults());
+        status.setText(activeSearch.statusLine(config.settings().searchMaxResults()));
     }
 
     @Override
     public void onSearchDirectory(String dirKey, List<SearchHit> matches, long elapsedMillis) {
-        if (!searchMode) {
+        if (!searchMode || activeSearch == null) {
             return;
         }
-        searchHits.removeIf(hit -> hit.dirKey().equals(dirKey));
-        searchHits.addAll(matches);
-        capSearchHits();
-        searchElapsed = elapsedMillis;
-        searchTableDirty = true;
+        activeSearch.updateDirectory(dirKey, matches, elapsedMillis, config.settings().searchMaxResults());
     }
 
     @Override
     public void onSearchProgress(int scannedDirs, int errors, long elapsedMillis) {
-        if (!searchMode) {
+        if (!searchMode || activeSearch == null) {
             return;
         }
-        searchScanned = scannedDirs;
-        searchErrors = errors;
-        searchElapsed = elapsedMillis;
-        renderSearchStatus(elapsedMillis, false);
+        activeSearch.updateProgress(scannedDirs, errors, elapsedMillis);
+        status.setText(activeSearch.statusLine(config.settings().searchMaxResults()));
     }
 
     @Override
     public void onSearchFinished(int scannedDirs, int errors, long elapsedMillis) {
-        if (!searchMode) {
+        if (!searchMode || activeSearch == null) {
             return;
         }
-        searchScanned = scannedDirs;
-        searchErrors = errors;
+        activeSearch.updateProgress(scannedDirs, errors, elapsedMillis);
         cancelSearch.setEnabled(false);
         searchRenderTimer.stop();
-        searchTableDirty = false;
-        renderSearch(elapsedMillis, true);
+        searchMode = false;
+        renderActiveSearch(true);
         if (screenshotFile != null) {
             javax.swing.Timer timer = new javax.swing.Timer(700, e -> captureSearchScreenshot());
             timer.setRepeats(false);
@@ -1599,7 +1612,6 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     }
 
     private void startSearch(boolean remember) {
-        showSearchTab();
         if (remember) {
             rememberPattern(includeFile, InputHistory.Bucket.INCLUDE_FILE);
             rememberPattern(excludeFile, InputHistory.Bucket.EXCLUDE_FILE);
@@ -1615,8 +1627,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             }
             fillExtensionPresets();
         }
-        activeSearchFilter = currentFilter();
-        controller.search(currentNames(), activeSearchFilter, searchSubfolders.isSelected());
+        pendingSearchFilter = currentFilter();
+        controller.search(currentNames(), pendingSearchFilter, searchSubfolders.isSelected());
     }
 
     private void renderBrowse() {
