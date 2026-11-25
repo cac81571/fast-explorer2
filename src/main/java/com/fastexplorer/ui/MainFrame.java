@@ -100,7 +100,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final JComboBox<String> extensionPreset = new JComboBox<>();
     private final JRadioButton pathRelative = new JRadioButton(Messages.PATH_RELATIVE);
     private final JRadioButton pathAbsolute = new JRadioButton(Messages.PATH_ABSOLUTE);
-    private final JCheckBox includeFolders = new JCheckBox(Messages.EXT_INCLUDE_FOLDERS, true);
+    private final JCheckBox includeFolders = new JCheckBox(Messages.EXT_INCLUDE_FOLDERS, false);
     private final JCheckBox searchSubfolders = new JCheckBox(Messages.SEARCH_SUBFOLDERS, true);
     private final JButton back = new JButton(Messages.BACK);
     private final JButton forward = new JButton(Messages.FORWARD);
