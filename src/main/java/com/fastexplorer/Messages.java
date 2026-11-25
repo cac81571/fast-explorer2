@@ -51,7 +51,7 @@ public final class Messages {
     public static final String EXT_PRESET_SOURCE = "ソース";
     public static final String EXT_RECENT_PREFIX = "最近: ";
     public static final String TIP_EXT = "空欄ですべての拡張子。カンマ・空白・セミコロン区切り。先頭のドットは省略できます（大文字小文字は区別しません）";
-    public static final String TIP_EXT_FOLDERS = "検索結果にフォルダを含める。検索は始めません";
+    public static final String TIP_EXT_FOLDERS = "検索結果にフォルダを含める。検索ボタンを押すまで結果には反映されません";
 
     public static final String COL_NAME = "名前";
     public static final String COL_LOCATION = "場所";

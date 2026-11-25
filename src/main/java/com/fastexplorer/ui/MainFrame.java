@@ -118,6 +118,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private List<FileRow> browseRows = List.of();
     private LoadStatus browseStatus = new LoadStatus(0, 0, LoadStatus.Origin.FILESYSTEM, "");
     private boolean searchMode;
+    private ExtensionFilter activeSearchFilter = ExtensionFilter.all();
     private long searchElapsed;
     private boolean searchFinished;
     private boolean dark;
@@ -428,6 +429,14 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensions.setOnDelete(value -> deleteHistory(InputHistory.Bucket.EXTENSION, value, extensions));
         includeFolders.setToolTipText(Messages.TIP_EXT_FOLDERS);
         includeFolders.setOpaque(false);
+        includeFolders.setName("includeFolders");
+        // Enter must not activate a default button; only Space (and click) toggles.
+        Object toggle = includeFolders.getInputMap(JComponent.WHEN_FOCUSED)
+                .get(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0));
+        if (toggle != null) {
+            includeFolders.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), toggle);
+        }
         fillExtensionPresets();
         extensionPreset.setName("extensionPreset");
         extensionPreset.addActionListener(e -> applyExtensionPreset());
@@ -820,7 +829,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (searchErrors > 0) {
             detail += " · 失敗 " + searchErrors;
         }
-        String filterText = currentFilter().describe();
+        String filterText = activeSearchFilter.describe();
         if (!filterText.isEmpty()) {
             detail += " · " + filterText;
         }
@@ -1499,7 +1508,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             }
             fillExtensionPresets();
         }
-        controller.search(currentNames(), currentFilter());
+        activeSearchFilter = currentFilter();
+        controller.search(currentNames(), activeSearchFilter);
     }
 
     private void renderBrowse() {
