@@ -29,6 +29,8 @@ public final class HistoryField extends JComboBox<String> {
     private boolean growHorizontally;
     private boolean autoComplete = true;
     private boolean completeAfterTyping;
+    /** Set on Enter so Tab / focus-loss commits do not look like an Enter search. */
+    private boolean enterCommit;
     private List<String> history = List.of();
     private Consumer<String> onDelete = value -> {
     };
@@ -64,6 +66,11 @@ public final class HistoryField extends JComboBox<String> {
 
             @Override
             public void keyPressed(KeyEvent event) {
+                if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+                    enterCommit = true;
+                } else if (event.getKeyCode() == KeyEvent.VK_TAB) {
+                    enterCommit = false;
+                }
                 if (event.getKeyCode() == KeyEvent.VK_DELETE && isPopupVisible()) {
                     Object selected = getSelectedItem();
                     if (selected != null) {
@@ -142,6 +149,13 @@ public final class HistoryField extends JComboBox<String> {
 
     public boolean isAdjusting() {
         return adjusting;
+    }
+
+    /** True when Enter caused this commit; clears the flag. */
+    public boolean consumeEnterCommit() {
+        boolean value = enterCommit;
+        enterCommit = false;
+        return value;
     }
 
     public String getText() {

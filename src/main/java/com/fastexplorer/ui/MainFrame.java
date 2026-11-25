@@ -458,7 +458,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensions.setHistory(inputHistory.list(InputHistory.Bucket.EXTENSION));
         extensions.setOnDelete(value -> deleteHistory(InputHistory.Bucket.EXTENSION, value, extensions));
         extensions.addActionListener(event -> {
-            if (SearchTriggers.enterInClosedField(event, extensions.isAdjusting(), extensions.isPopupVisible())) {
+            if (SearchTriggers.enterInClosedField(
+                    event, extensions.isAdjusting(), extensions.isPopupVisible(), extensions.consumeEnterCommit())) {
                 startSearch(true);
             }
         });
@@ -1037,7 +1038,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         field.setHistory(inputHistory.list(bucket));
         field.setOnDelete(value -> deleteHistory(bucket, value, field));
         field.addActionListener(event -> {
-            if (SearchTriggers.enterInClosedField(event, field.isAdjusting(), field.isPopupVisible())) {
+            if (SearchTriggers.enterInClosedField(
+                    event, field.isAdjusting(), field.isPopupVisible(), field.consumeEnterCommit())) {
                 startSearch(true);
             }
         });

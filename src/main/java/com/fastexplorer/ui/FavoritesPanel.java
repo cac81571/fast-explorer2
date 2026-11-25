@@ -255,7 +255,8 @@ public final class FavoritesPanel extends JPanel {
             }
         });
         filter.addActionListener(event -> {
-            if (SearchTriggers.enterInClosedField(event, filter.isAdjusting(), filter.isPopupVisible())) {
+            if (SearchTriggers.enterInClosedField(
+                    event, filter.isAdjusting(), filter.isPopupVisible(), filter.consumeEnterCommit())) {
                 rememberFilter();
             } else if (!filter.isAdjusting() && "comboBoxChanged".equals(event.getActionCommand())) {
                 rememberFilter();
