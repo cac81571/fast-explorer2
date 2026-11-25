@@ -243,9 +243,16 @@ public final class FavoritesPanel extends JPanel {
         group.setToolTipText(Messages.TIP_FAV_GROUP);
         group.setFocusable(false);
         group.addActionListener(event -> createGroup());
+        JButton collapse = new JButton(Messages.FAV_COLLAPSE_ALL);
+        collapse.setToolTipText(Messages.TIP_FAV_COLLAPSE_ALL);
+        collapse.setFocusable(false);
+        collapse.setName("favoritesCollapseAll");
+        collapse.addActionListener(event -> collapseAll());
         buttons.add(add);
         buttons.add(Box.createHorizontalStrut(4));
         buttons.add(group);
+        buttons.add(Box.createHorizontalStrut(4));
+        buttons.add(collapse);
         buttons.add(Box.createHorizontalGlue());
         box.add(title);
         box.add(Box.createVerticalStrut(6));
@@ -470,6 +477,12 @@ public final class FavoritesPanel extends JPanel {
         view.expandPath(path);
         for (int i = 0; i < node.getChildCount(); i++) {
             expandAll(path.pathByAddingChild(node.getChildAt(i)));
+        }
+    }
+
+    private void collapseAll() {
+        for (int row = view.getRowCount() - 1; row >= 0; row--) {
+            view.collapseRow(row);
         }
     }
 
