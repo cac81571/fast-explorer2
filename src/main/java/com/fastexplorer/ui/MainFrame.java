@@ -5,6 +5,7 @@ import com.fastexplorer.cache.ListingCache;
 import com.fastexplorer.config.AppConfig;
 import com.fastexplorer.favorites.FavoriteTree;
 import com.fastexplorer.favorites.FavoritesStore;
+import com.fastexplorer.filecache.ExternalEditor;
 import com.fastexplorer.filecache.FileContentCache;
 import com.fastexplorer.filecache.WindowsExplorer;
 import com.fastexplorer.history.InputHistory;
@@ -33,6 +34,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -47,6 +49,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.TransferHandler;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
@@ -329,6 +332,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         view.add(closeAllSearch);
         view.add(darkItem);
 
+        JMenu settings = new JMenu(Messages.MENU_SETTINGS);
+        JMenuItem setEditor = new JMenuItem(Messages.MENU_SET_EDITOR);
+        setEditor.addActionListener(e -> configureExternalEditor());
+        settings.add(setEditor);
+
         JMenu help = new JMenu(Messages.MENU_HELP);
         JMenuItem about = new JMenuItem(Messages.MENU_ABOUT);
         about.addActionListener(e -> JOptionPane.showMessageDialog(
@@ -340,6 +348,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
         bar.add(file);
         bar.add(view);
+        bar.add(settings);
         bar.add(help);
         return bar;
     }
@@ -1271,6 +1280,14 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             reveal.setToolTipText(windows ? null : Messages.TIP_EXPLORER_WINDOWS);
             reveal.addActionListener(e -> revealFileInExplorer(row.path().toString()));
             menu.add(reveal);
+            JMenuItem original = new JMenuItem(Messages.OPEN_ORIGINAL);
+            original.setToolTipText(Messages.TIP_OPEN_ORIGINAL);
+            original.addActionListener(e -> openOriginal(row));
+            menu.add(original);
+            JMenuItem editor = new JMenuItem(Messages.OPEN_EXTERNAL_EDITOR);
+            editor.setToolTipText(Messages.TIP_EXTERNAL_EDITOR);
+            editor.addActionListener(e -> openWithExternalEditor(row));
+            menu.add(editor);
             JMenuItem cache = new JMenuItem(Messages.OPEN_LOCAL_CACHE);
             cache.setToolTipText(Messages.TIP_LOCAL_CACHE);
             cache.addActionListener(e -> openLocalCopy(row, false));
@@ -1381,6 +1398,94 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
                 SwingUtilities.invokeLater(() -> showBanner(e.getMessage()));
             }
         });
+    }
+
+    private void openOriginal(FileRow row) {
+        if (row == null) {
+            return;
+        }
+        fileIo.submit(() -> {
+            try {
+                if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                    SwingUtilities.invokeLater(() -> showBanner(Messages.ERR_DESKTOP));
+                    return;
+                }
+                Desktop.getDesktop().open(row.path().toFile());
+                SwingUtilities.invokeLater(() -> status.setText(Messages.OPEN_ORIGINAL + ": " + row.path()));
+            } catch (Exception e) {
+                String detail = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                SwingUtilities.invokeLater(() -> showBanner(Messages.ERR_OPEN_FILE + ": " + detail));
+            }
+        });
+    }
+
+    private void openWithExternalEditor(FileRow row) {
+        if (row == null) {
+            return;
+        }
+        if (!ExternalEditor.isConfigured(config.externalEditor())) {
+            JOptionPane.showMessageDialog(this, Messages.EDITOR_NOT_SET, Messages.MENU_SET_EDITOR,
+                    JOptionPane.INFORMATION_MESSAGE);
+            configureExternalEditor();
+            if (!ExternalEditor.isConfigured(config.externalEditor())) {
+                return;
+            }
+        }
+        String editor = config.externalEditor();
+        fileIo.submit(() -> {
+            try {
+                ExternalEditor.open(editor, row.path());
+                SwingUtilities.invokeLater(() -> status.setText(Messages.OPEN_EXTERNAL_EDITOR + ": " + row.path()));
+            } catch (Exception e) {
+                String detail = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                SwingUtilities.invokeLater(() -> showBanner(Messages.ERR_OPEN_FILE + ": " + detail));
+            }
+        });
+    }
+
+    private void configureExternalEditor() {
+        JTextField field = new JTextField(config.externalEditor(), 36);
+        field.setToolTipText(Messages.EDITOR_HINT);
+        JButton browse = new JButton(Messages.EDITOR_BROWSE);
+        browse.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle(Messages.MENU_SET_EDITOR);
+            chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            if (PathStrings.isWindows()) {
+                chooser.setFileFilter(new FileNameExtensionFilter("実行ファイル (*.exe;*.bat;*.cmd)", "exe", "bat", "cmd"));
+            }
+            String current = field.getText().trim();
+            if (!current.isEmpty()) {
+                Path currentPath = Path.of(current);
+                if (java.nio.file.Files.isRegularFile(currentPath)) {
+                    chooser.setSelectedFile(currentPath.toFile());
+                } else if (currentPath.getParent() != null && java.nio.file.Files.isDirectory(currentPath.getParent())) {
+                    chooser.setCurrentDirectory(currentPath.getParent().toFile());
+                }
+            }
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                field.setText(chooser.getSelectedFile().getAbsolutePath());
+            }
+        });
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.add(field, BorderLayout.CENTER);
+        row.add(browse, BorderLayout.EAST);
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.add(new JLabel(Messages.EDITOR_PROMPT), BorderLayout.NORTH);
+        panel.add(row, BorderLayout.CENTER);
+        panel.add(new JLabel(Messages.EDITOR_HINT), BorderLayout.SOUTH);
+        int answer = JOptionPane.showConfirmDialog(
+                this, panel, Messages.MENU_SET_EDITOR, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) {
+            return;
+        }
+        config.setExternalEditor(field.getText());
+        try {
+            config.save();
+            status.setText(Messages.EDITOR_SAVED);
+        } catch (IOException e) {
+            showBanner(Messages.ERR_OPEN_FILE + ": " + e.getMessage());
+        }
     }
 
     private void openLocalCopy(FileRow row, boolean readOnly) {

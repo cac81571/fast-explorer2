@@ -40,7 +40,7 @@ public final class Messages {
     public static final String PATH_RELATIVE = "相対";
     public static final String PATH_ABSOLUTE = "絶対";
     public static final String TIP_PATH_DISPLAY = "場所列を、検索を始めたフォルダからの相対パスかフルパスで表示します";
-    public static final String MENU_COPY = "コピー";
+    public static final String MENU_COPY = "パスをコピー";
     public static final String COPY_FULL = "フルパスをコピー";
     public static final String COPY_RELATIVE = "相対パスをコピー";
     public static final String COPY_FILE_NAME = "ファイル名をコピー";
@@ -74,6 +74,7 @@ public final class Messages {
 
     public static final String MENU_FILE = "ファイル";
     public static final String MENU_VIEW = "表示";
+    public static final String MENU_SETTINGS = "設定";
     public static final String MENU_HELP = "ヘルプ";
     public static final String MENU_OPEN_CONFIG = "設定フォルダを開く";
     public static final String MENU_EXIT = "終了";
@@ -86,6 +87,12 @@ public final class Messages {
     public static final String MENU_CLEAR_HISTORY = "入力履歴を消去";
     public static final String MENU_INDEX_CURRENT = "このフォルダをインデックス";
     public static final String MENU_CLOSE_ALL_SEARCH = "検索タブをすべて閉じる";
+    public static final String MENU_SET_EDITOR = "外部エディタを設定…";
+    public static final String EDITOR_BROWSE = "参照…";
+    public static final String EDITOR_PROMPT = "外部エディタの実行ファイル";
+    public static final String EDITOR_HINT = "例: C:\\Program Files\\Microsoft VS Code\\Code.exe";
+    public static final String EDITOR_NOT_SET = "外部エディタが未設定です。設定メニューから指定してください。";
+    public static final String EDITOR_SAVED = "外部エディタを保存しました";
 
     public static final String TAB_LIST = "一覧";
     public static final String TAB_SEARCH = "検索";
@@ -94,10 +101,14 @@ public final class Messages {
 
     public static final String OPEN_IN_EXPLORER = "エクスプローラーで開く";
     public static final String REVEAL_IN_EXPLORER = "ファイルの場所をエクスプローラーで開く";
+    public static final String OPEN_ORIGINAL = "オリジナルを開く";
+    public static final String OPEN_EXTERNAL_EDITOR = "外部エディタで開く";
     public static final String OPEN_LOCAL_CACHE = "ローカルのキャッシュを開く";
     public static final String OPEN_LOCAL_CACHE_RO = "ローカルのキャッシュを読取り専用で開く";
     public static final String INDEX_BUILD = "インデックス作成";
     public static final String TIP_EXPLORER_WINDOWS = "この操作は Windows でのみ使えます";
+    public static final String TIP_OPEN_ORIGINAL = "サーバー上のファイルを、関連付けられたアプリで直接開きます";
+    public static final String TIP_EXTERNAL_EDITOR = "サーバー上のファイルを、設定した外部エディタで直接開きます";
     public static final String TIP_LOCAL_CACHE = "共有上のファイルをローカルにコピーして開きます。編集はサーバーに書き戻されません";
     public static final String TIP_LOCAL_CACHE_RO = "共有上のファイルを読取り専用のローカルコピーとして開きます";
     public static final String START_FALLBACK = "前回のフォルダを開けませんでした。ホームを表示します。";

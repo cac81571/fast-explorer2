@@ -72,4 +72,18 @@ class AppConfigTest {
         assertEquals("", AppConfig.escapeProperty(null));
         assertEquals("C:\\\\Users\\\\foo", AppConfig.escapeProperty("C:\\Users\\foo"));
     }
+
+    @Test
+    void roundTripsExternalEditorPath() throws Exception {
+        AppConfig created = AppConfig.load(temp.resolve("editor"));
+        String editor = "C:\\Program Files\\Microsoft VS Code\\Code.exe";
+        created.setExternalEditor(editor);
+        created.save();
+
+        String raw = Files.readString(created.configFile(), StandardCharsets.UTF_8);
+        assertTrue(raw.contains("external.editor=C:\\\\Program Files\\\\Microsoft VS Code\\\\Code.exe"));
+
+        AppConfig loaded = AppConfig.load(created.dataDir());
+        assertEquals(editor, loaded.externalEditor());
+    }
 }
