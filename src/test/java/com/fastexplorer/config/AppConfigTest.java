@@ -52,4 +52,24 @@ class AppConfigTest {
         assertTrue(config.darkTheme());
         assertFalse(config.initialPath().isBlank());
     }
+
+    @Test
+    void roundTripsWindowsLastPathWithBackslashes() throws Exception {
+        AppConfig created = AppConfig.load(temp.resolve("paths"));
+        String windowsPath = "C:\\Users\\n-sug.INSPIRON5515\\Desktop\\share";
+        created.setLastPath(windowsPath);
+        created.save();
+
+        String raw = Files.readString(created.configFile(), StandardCharsets.UTF_8);
+        assertTrue(raw.contains("last.path=C:\\\\Users\\\\n-sug.INSPIRON5515\\\\Desktop\\\\share"));
+
+        AppConfig loaded = AppConfig.load(created.dataDir());
+        assertEquals(windowsPath, loaded.lastPath());
+    }
+
+    @Test
+    void escapePropertyDoublesBackslashes() {
+        assertEquals("", AppConfig.escapeProperty(null));
+        assertEquals("C:\\\\Users\\\\foo", AppConfig.escapeProperty("C:\\Users\\foo"));
+    }
 }

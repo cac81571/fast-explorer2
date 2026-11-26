@@ -209,7 +209,6 @@ public final class AppConfig {
 
     public void save() throws IOException {
         Files.createDirectories(dataDir);
-        String safeInitial = initialPath.replace("\r", "").replace("\n", "");
         String text = """
                 # Fast Explorer 設定
                 # キャッシュの有効期限（秒）。期限内はキャッシュだけを表示します。
@@ -228,7 +227,7 @@ public final class AppConfig {
                 # light または dark
                 theme=%s
 
-                # 起動時に開くパス。空ならユーザーホーム。コマンド引数があるときは引数が優先されます。
+                # 固定の起動パス（任意）。last.path が空のときだけ使います。コマンド引数があるときは引数が優先されます。
                 initial.path=%s
 
                 # お気に入りパネルと一覧の境目（ピクセル）
@@ -237,7 +236,7 @@ public final class AppConfig {
                 # 検索欄で使った拡張子。| 区切り。
                 search.recent.extensions=%s
 
-                # 前回開いていたフォルダ。コマンド引数があるときはそちらが優先されます。
+                # 前回表示していたフォルダ。次回起動時に開きます。コマンド引数があるときはそちらが優先されます。
                 last.path=%s
 
                 # アドレス・検索・拡張子の履歴の最大件数
@@ -263,12 +262,12 @@ public final class AppConfig {
                 searchMaxDirectories,
                 searchMaxResults,
                 darkTheme ? "dark" : "light",
-                safeInitial,
+                escapeProperty(initialPath),
                 favoritesDivider,
                 recentExtensions.stream().map(value -> value.replace("|", " ")).reduce((a, b) -> a + "|" + b).orElse(""),
-                lastPath,
+                escapeProperty(lastPath),
                 historyMaxEntries,
-                fileCacheDir,
+                escapeProperty(fileCacheDir),
                 fileCacheMaxMb,
                 indexMaxDepth,
                 relativePaths ? "relative" : "absolute",
@@ -276,6 +275,17 @@ public final class AppConfig {
         try (Writer writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
             writer.write(text);
         }
+    }
+
+    /**
+     * {@link Properties#load} treats backslashes as escapes (newline, unicode, and so on).
+     * Windows paths must be written with doubled backslashes or they corrupt on the next launch.
+     */
+    static String escapeProperty(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        return value.replace("\r", "").replace("\n", "").replace("\\", "\\\\");
     }
 
     private static List<String> parseRecentExtensions(String raw) {
