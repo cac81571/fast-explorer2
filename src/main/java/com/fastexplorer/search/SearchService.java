@@ -81,6 +81,18 @@ public final class SearchService {
             ExtensionFilter filter,
             boolean includeSubfolders
     ) {
+        search(root, query, cancelled, listener, filter, includeSubfolders, true);
+    }
+
+    public void search(
+            Path root,
+            String query,
+            BooleanSupplier cancelled,
+            Listener listener,
+            ExtensionFilter filter,
+            boolean includeSubfolders,
+            boolean useIndex
+    ) {
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         String q = query == null ? "" : query.trim();
         if (q.isEmpty()) {
@@ -88,12 +100,14 @@ public final class SearchService {
             return;
         }
         String rootKey = PathStrings.cacheKey(root);
-        List<SearchHit> initial;
-        try {
-            initial = cache.searchByName(rootKey, q, settings.searchMaxResults(), effective, includeSubfolders);
-        } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "index search failed", e);
-            initial = List.of();
+        List<SearchHit> initial = List.of();
+        if (useIndex) {
+            try {
+                initial = cache.searchByName(rootKey, q, settings.searchMaxResults(), effective, includeSubfolders);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "index search failed", e);
+                initial = List.of();
+            }
         }
         if (cancelled.getAsBoolean()) {
             listener.onFinished(0, 0, true);
@@ -120,7 +134,7 @@ public final class SearchService {
                 continue;
             }
             scanned++;
-            Visit visit = readDirectory(dir, key, cancelled);
+            Visit visit = readDirectory(dir, key, cancelled, useIndex);
             if (visit.cancelled()) {
                 listener.onFinished(scanned, errors, true);
                 return;
@@ -172,15 +186,29 @@ public final class SearchService {
             ExtensionFilter filter,
             boolean includeSubfolders
     ) {
+        search(root, names, cancelled, listener, filter, includeSubfolders, true);
+    }
+
+    public void search(
+            Path root,
+            NameFilter names,
+            BooleanSupplier cancelled,
+            Listener listener,
+            ExtensionFilter filter,
+            boolean includeSubfolders,
+            boolean useIndex
+    ) {
         NameFilter effectiveNames = names == null ? NameFilter.all() : names;
         ExtensionFilter effective = filter == null ? ExtensionFilter.all() : filter;
         String rootKey = PathStrings.cacheKey(root);
-        List<SearchHit> initial;
-        try {
-            initial = cache.search(rootKey, effectiveNames, settings.searchMaxResults(), effective, includeSubfolders);
-        } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "index search failed", e);
-            initial = List.of();
+        List<SearchHit> initial = List.of();
+        if (useIndex) {
+            try {
+                initial = cache.search(rootKey, effectiveNames, settings.searchMaxResults(), effective, includeSubfolders);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "index search failed", e);
+                initial = List.of();
+            }
         }
         if (cancelled.getAsBoolean()) {
             listener.onFinished(0, 0, true);
@@ -207,7 +235,7 @@ public final class SearchService {
                 continue;
             }
             scanned++;
-            Visit visit = readDirectory(dir, key, cancelled);
+            Visit visit = readDirectory(dir, key, cancelled, useIndex);
             if (visit.cancelled()) {
                 listener.onFinished(scanned, errors, true);
                 return;
@@ -241,14 +269,18 @@ public final class SearchService {
         listener.onFinished(scanned, errors, cancelled.getAsBoolean());
     }
 
-    private Visit readDirectory(Path dir, String key, BooleanSupplier cancelled) {
+    private Visit readDirectory(Path dir, String key, BooleanSupplier cancelled, boolean useIndex) {
         DirectorySnapshot snapshot = null;
-        try {
-            snapshot = cache.find(key).orElse(null);
-        } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "cache read failed during search", e);
+        if (useIndex) {
+            try {
+                snapshot = cache.find(key).orElse(null);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "cache read failed during search", e);
+            }
         }
-        CacheDecision decision = CacheDecision.decide(snapshot, System.currentTimeMillis(), settings.ttlMillis());
+        CacheDecision decision = useIndex
+                ? CacheDecision.decide(snapshot, System.currentTimeMillis(), settings.ttlMillis())
+                : CacheDecision.MISS;
         if (decision == CacheDecision.FRESH && snapshot != null) {
             return Visit.fresh(snapshot.entries());
         }

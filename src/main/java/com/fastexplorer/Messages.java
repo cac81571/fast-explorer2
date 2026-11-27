@@ -18,6 +18,10 @@ public final class Messages {
     public static final String SEARCH = "検索";
     public static final String SEARCH_SUBFOLDERS = "サブフォルダを検索する";
     public static final String TIP_SEARCH_SUBFOLDERS = "オフにすると、いまのフォルダだけを検索します";
+    public static final String SEARCH_USE_INDEX = "インデックスを使う";
+    public static final String TIP_SEARCH_USE_INDEX = "オフにすると、インデックスを使わずファイルシステムだけを検索します";
+    public static final String INDEX_CREATED_PREFIX = "インデックス作成: ";
+    public static final String INDEX_NONE = "インデックスなし";
     public static final String CANCEL = "中止";
     public static final String CANCELLED = "中止しました";
     public static final String THEME_DARK = "ダーク";
@@ -211,5 +215,12 @@ public final class Messages {
 
     public static String indexing(String path, int folders, int files, long millis) {
         return "インデックス中… " + path + " · フォルダ " + folders + " · ファイル " + files + " · " + millis + " ms";
+    }
+
+    public static String indexCreated(String formattedTime) {
+        if (formattedTime == null || formattedTime.isBlank()) {
+            return INDEX_NONE;
+        }
+        return INDEX_CREATED_PREFIX + formattedTime;
     }
 }

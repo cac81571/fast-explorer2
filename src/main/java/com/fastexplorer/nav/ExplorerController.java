@@ -172,6 +172,10 @@ public final class ExplorerController {
     }
 
     public void search(NameFilter names, ExtensionFilter filter, boolean includeSubfolders) {
+        search(names, filter, includeSubfolders, true);
+    }
+
+    public void search(NameFilter names, ExtensionFilter filter, boolean includeSubfolders, boolean useIndex) {
         Path root = current;
         if (root == null || names == null) {
             return;
@@ -180,7 +184,7 @@ public final class ExplorerController {
         long req = requestSeq.incrementAndGet();
         long start = System.nanoTime();
         edt.accept(() -> listener.onSearchStarted(names.hasFilePatterns() || names.hasDirectoryPatterns() ? "pattern" : ""));
-        tasks.submit(() -> runSearch(root, names, effective, includeSubfolders, req, start));
+        tasks.submit(() -> runSearch(root, names, effective, includeSubfolders, useIndex, req, start));
     }
 
     /** Invalidate the in-flight listing or search immediately. */
@@ -322,6 +326,7 @@ public final class ExplorerController {
             NameFilter names,
             ExtensionFilter filter,
             boolean includeSubfolders,
+            boolean useIndex,
             long req,
             long startNano
     ) {
@@ -416,7 +421,7 @@ public final class ExplorerController {
                         }
                     });
                 }
-            }, filter, includeSubfolders);
+            }, filter, includeSubfolders, useIndex);
         } catch (RuntimeException e) {
             LOG.log(Level.WARNING, "search failed", e);
             reportError(req, Messages.ERR_IO + ": " + e.getMessage(), true);

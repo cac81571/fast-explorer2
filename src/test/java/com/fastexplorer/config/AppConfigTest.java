@@ -74,6 +74,20 @@ class AppConfigTest {
     }
 
     @Test
+    void searchUseIndexDefaultsTrueAndRoundTrips() throws Exception {
+        AppConfig created = AppConfig.load(temp.resolve("use-index"));
+        assertTrue(created.searchUseIndex());
+        created.setSearchUseIndex(false);
+        created.save();
+
+        String raw = Files.readString(created.configFile(), StandardCharsets.UTF_8);
+        assertTrue(raw.contains("search.use.index=false"));
+
+        AppConfig loaded = AppConfig.load(created.dataDir());
+        assertFalse(loaded.searchUseIndex());
+    }
+
+    @Test
     void roundTripsExternalEditorPath() throws Exception {
         AppConfig created = AppConfig.load(temp.resolve("editor"));
         String editor = "C:\\Program Files\\Microsoft VS Code\\Code.exe";

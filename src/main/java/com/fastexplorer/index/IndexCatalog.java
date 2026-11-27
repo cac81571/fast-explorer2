@@ -113,6 +113,44 @@ public final class IndexCatalog implements AutoCloseable {
         }
     }
 
+    /**
+     * Best index that covers {@code pathKey}: an exact root or an ancestor.
+     * Prefers the longest root key, then the newest finished time.
+     */
+    public Optional<IndexRecord> findCovering(String pathKey) {
+        if (pathKey == null || pathKey.isBlank()) {
+            return Optional.empty();
+        }
+        IndexRecord best = null;
+        for (IndexRecord record : list()) {
+            if (!covers(record.rootKey(), pathKey)) {
+                continue;
+            }
+            if (best == null
+                    || record.rootKey().length() > best.rootKey().length()
+                    || (record.rootKey().length() == best.rootKey().length()
+                    && createdAt(record) > createdAt(best))) {
+                best = record;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    static boolean covers(String rootKey, String pathKey) {
+        return pathKey.equals(rootKey) || pathKey.startsWith(rootKey + "/");
+    }
+
+    /** Creation / last-build time shown in the UI. */
+    public static long createdAt(IndexRecord record) {
+        if (record == null) {
+            return 0;
+        }
+        if (record.finishedAt() > 0) {
+            return record.finishedAt();
+        }
+        return record.startedAt();
+    }
+
     public List<IndexRecord> list() {
         synchronized (lock) {
             try (Statement statement = connection.createStatement();

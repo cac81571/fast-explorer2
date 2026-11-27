@@ -141,6 +141,21 @@ class SearchServiceTest {
     }
 
     @Test
+    void withoutIndexSkipsCacheHitsAndRelistsFreshDirectories() {
+        Path root = temp.resolve("root");
+        long fresh = System.currentTimeMillis();
+        cache.replace(PathStrings.cacheKey(root), List.of(
+                file("hit-cached.txt"),
+                dir("sub")), fresh, true);
+        Recording listener = new Recording();
+        service().search(root, "hit", () -> false, listener, ExtensionFilter.all(), true, false);
+        assertTrue(listener.cacheNames.isEmpty());
+        assertTrue(listed.contains(root));
+        assertTrue(listener.updatedNames.contains("hit-new.txt"));
+        assertTrue(listener.finished);
+    }
+
+    @Test
     void withoutSubfoldersOnlyTheRootDirectoryIsSearched() {
         Path root = temp.resolve("root");
         long fresh = System.currentTimeMillis();

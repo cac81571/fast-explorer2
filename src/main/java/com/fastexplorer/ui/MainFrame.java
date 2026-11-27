@@ -105,6 +105,8 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
     private final JRadioButton pathAbsolute = new JRadioButton(Messages.PATH_ABSOLUTE);
     private final JCheckBox includeFolders = new JCheckBox(Messages.EXT_INCLUDE_FOLDERS, false);
     private final JCheckBox searchSubfolders = new JCheckBox(Messages.SEARCH_SUBFOLDERS, true);
+    private final JCheckBox searchUseIndex = new JCheckBox(Messages.SEARCH_USE_INDEX, true);
+    private final JLabel indexCreated = new JLabel(" ");
     private final JButton back = new JButton(Messages.BACK);
     private final JButton forward = new JButton(Messages.FORWARD);
     private final JButton up = new JButton(Messages.UP);
@@ -464,6 +466,21 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         subfolders.fill = GridBagConstraints.NONE;
         subfolders.insets = new Insets(0, 4, 4, 0);
         patternGrid.add(searchSubfolders, subfolders);
+        searchUseIndex.setToolTipText(Messages.TIP_SEARCH_USE_INDEX);
+        searchUseIndex.setOpaque(false);
+        searchUseIndex.setName("searchUseIndex");
+        searchUseIndex.setSelected(config.searchUseIndex());
+        searchUseIndex.addActionListener(e -> {
+            config.setSearchUseIndex(searchUseIndex.isSelected());
+            try {
+                config.save();
+            } catch (IOException ignored) {
+                // The choice still applies for this session.
+            }
+        });
+        indexCreated.setName("indexCreated");
+        indexCreated.setOpaque(false);
+        indexCreated.setText(Messages.INDEX_NONE);
         JLabel extensionLabel = new JLabel(Messages.EXT_LABEL);
         extensions.setPlaceholder(Messages.EXT_PLACEHOLDER);
         extensions.setToolTipText(Messages.TIP_EXT);
@@ -501,6 +518,10 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         extensionRow.add(Box.createHorizontalStrut(8));
         extensionRow.add(includeFolders);
         extensionRow.add(Box.createHorizontalGlue());
+        extensionRow.add(Box.createHorizontalStrut(12));
+        extensionRow.add(searchUseIndex);
+        extensionRow.add(Box.createHorizontalStrut(8));
+        extensionRow.add(indexCreated);
         extensionRow.add(Box.createHorizontalStrut(12));
         extensionRow.add(pathDisplayLabel);
         extensionRow.add(Box.createHorizontalStrut(6));
@@ -1589,6 +1610,30 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
     private void refreshIndex() {
         indexPanel.setRecords(indexCatalog.list());
+        updateIndexCreatedLabel(controller.currentPath());
+    }
+
+    private void updateIndexCreatedLabel(Path directory) {
+        if (directory == null) {
+            indexCreated.setText(Messages.INDEX_NONE);
+            indexCreated.setToolTipText(null);
+            return;
+        }
+        try {
+            var covering = indexCatalog.findCovering(PathStrings.cacheKey(directory));
+            if (covering.isEmpty()) {
+                indexCreated.setText(Messages.INDEX_NONE);
+                indexCreated.setToolTipText(null);
+                return;
+            }
+            IndexRecord record = covering.get();
+            long created = IndexCatalog.createdAt(record);
+            indexCreated.setText(Messages.indexCreated(Formatters.time(created)));
+            indexCreated.setToolTipText(record.displayPath());
+        } catch (RuntimeException e) {
+            indexCreated.setText(Messages.INDEX_NONE);
+            indexCreated.setToolTipText(null);
+        }
     }
 
     private void openIndexedFolder(IndexRecord record) {
@@ -1656,6 +1701,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         forward.setEnabled(canForward);
         up.setEnabled(canUp);
         setTitle(Messages.APP_NAME + " — " + displayPath);
+        updateIndexCreatedLabel(controller.currentPath());
     }
 
     @Override
@@ -1767,7 +1813,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             fillExtensionPresets();
         }
         pendingSearchFilter = currentFilter();
-        controller.search(currentNames(), pendingSearchFilter, searchSubfolders.isSelected());
+        controller.search(
+                currentNames(),
+                pendingSearchFilter,
+                searchSubfolders.isSelected(),
+                searchUseIndex.isSelected());
     }
 
     private void renderBrowse() {

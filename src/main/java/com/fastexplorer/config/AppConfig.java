@@ -36,6 +36,7 @@ public final class AppConfig {
     private int indexMaxDepth = 0;
     private boolean relativePaths = true;
     private boolean searchSubfolders = true;
+    private boolean searchUseIndex = true;
     private String externalEditor = "";
 
     private AppConfig(Path dataDir) {
@@ -81,6 +82,8 @@ public final class AppConfig {
                     properties.getProperty("path.display", "relative").trim());
             config.searchSubfolders = !"false".equalsIgnoreCase(
                     properties.getProperty("search.subfolders", "true").trim());
+            config.searchUseIndex = !"false".equalsIgnoreCase(
+                    properties.getProperty("search.use.index", "true").trim());
             config.externalEditor = properties.getProperty("external.editor", "").trim();
         } else {
             try {
@@ -149,6 +152,14 @@ public final class AppConfig {
 
     public void setSearchSubfolders(boolean searchSubfolders) {
         this.searchSubfolders = searchSubfolders;
+    }
+
+    public boolean searchUseIndex() {
+        return searchUseIndex;
+    }
+
+    public void setSearchUseIndex(boolean searchUseIndex) {
+        this.searchUseIndex = searchUseIndex;
     }
 
     public String externalEditor() {
@@ -269,6 +280,9 @@ public final class AppConfig {
                 # サブフォルダも検索する
                 search.subfolders=%s
 
+                # 検索でインデックス（名前キャッシュ）を使う
+                search.use.index=%s
+
                 # 外部エディタの実行ファイル。右クリックの「外部エディタで開く」で使います
                 external.editor=%s
                 """.formatted(
@@ -287,6 +301,7 @@ public final class AppConfig {
                 indexMaxDepth,
                 relativePaths ? "relative" : "absolute",
                 searchSubfolders,
+                searchUseIndex,
                 escapeProperty(externalEditor));
         try (Writer writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
             writer.write(text);
