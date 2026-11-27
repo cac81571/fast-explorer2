@@ -62,7 +62,7 @@ public final class FavoritesPanel extends JPanel {
     private final Consumer<String> onError;
     private final InputHistory inputHistory;
     private final HistoryField filter = new HistoryField();
-    private final JTree view = new JTree();
+    private final JTree view = createFavoritesTree();
     private final FavoriteRenderer renderer = new FavoriteRenderer();
 
     public FavoritesPanel(
@@ -440,6 +440,17 @@ public final class FavoritesPanel extends JPanel {
             index.addActionListener(e -> indexFolder.accept(target));
             menu.add(index);
         }
+        if (node != null && node.isGroup() && path != null) {
+            JMenuItem expandUnder = new JMenuItem(Messages.FAV_EXPAND_UNDER);
+            expandUnder.setToolTipText(Messages.TIP_FAV_EXPAND_UNDER);
+            expandUnder.setName("favoritesExpandUnder");
+            boolean hasChildren = path.getLastPathComponent() instanceof DefaultMutableTreeNode swing
+                    && swing.getChildCount() > 0;
+            expandUnder.setEnabled(hasChildren);
+            TreePath expandPath = path;
+            expandUnder.addActionListener(e -> expandAll(expandPath));
+            menu.add(expandUnder);
+        }
         JMenuItem rename = new JMenuItem(Messages.FAV_RENAME);
         rename.setEnabled(node != null);
         rename.addActionListener(e -> renameSelected());
@@ -493,6 +504,7 @@ public final class FavoritesPanel extends JPanel {
         if (selected != null) {
             select(selected);
         }
+        view.repaint();
     }
 
     private static DefaultMutableTreeNode swingNode(FavoriteNode node) {
@@ -515,6 +527,29 @@ public final class FavoritesPanel extends JPanel {
         for (int row = view.getRowCount() - 1; row >= 0; row--) {
             view.collapseRow(row);
         }
+    }
+
+    /**
+     * Swing / FlatLaf bug: after a drop we replace the tree model in {@link #reload()}, then
+     * {@code TransferHandler} clears {@code dropLocation}. {@code BasicTreeUI.getDropLineRect}
+     * still uses the old path, {@code getPathBounds} returns null, and {@code rect.y} NPEs.
+     */
+    private static JTree createFavoritesTree() {
+        return new JTree() {
+            @Override
+            protected void firePropertyChange(String propertyName, Object oldValue, Object newValue) {
+                if ("dropLocation".equals(propertyName) && newValue == null) {
+                    return;
+                }
+                if ("dropLocation".equals(propertyName)
+                        && oldValue instanceof JTree.DropLocation location
+                        && location.getPath() != null
+                        && getRowForPath(location.getPath()) < 0) {
+                    return;
+                }
+                super.firePropertyChange(propertyName, oldValue, newValue);
+            }
+        };
     }
 
     private void select(String id) {

@@ -126,6 +126,7 @@ public final class Messages {
     public static final String FAV_ADD_CURRENT = "現在を追加";
     public static final String FAV_ADD_GROUP = "グループ";
     public static final String FAV_COLLAPSE_ALL = "全て折りたたむ";
+    public static final String FAV_EXPAND_UNDER = "配下を全て展開";
     public static final String FAV_ADD_SELECTED = "お気に入りに追加";
     public static final String FAV_RENAME = "名前を変更";
     public static final String FAV_DELETE = "削除";
@@ -142,6 +143,7 @@ public final class Messages {
     public static final String TIP_FAV_ADD = "現在のフォルダをお気に入りに追加（選択中のグループの中にも入れられます）";
     public static final String TIP_FAV_GROUP = "グループを作る";
     public static final String TIP_FAV_COLLAPSE_ALL = "お気に入りツリーをすべて折りたたむ";
+    public static final String TIP_FAV_EXPAND_UNDER = "このグループの下をすべて開きます";
     public static final String TIP_FAV_FILTER = "表示名とパスで絞り込み";
 
     public static final String ERR_FAV_LOAD = "お気に入りを読めませんでした。空の一覧で起動します";
