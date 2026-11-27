@@ -251,6 +251,7 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             if (tabs.getSelectedComponent() == indexPanel) {
                 refreshIndex();
             }
+            syncAddressForSelectedTab();
             refreshStatusForSelectedTab();
         });
         split.setRightComponent(tabs);
@@ -898,8 +899,9 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (done) {
             activeSearch.finish(activeSearch.scanned(), activeSearch.errors(), activeSearch.elapsed());
         }
+        Path root = activeSearch.root() != null ? activeSearch.root() : controller.currentPath();
         activeSearch.renderTable(
-                controller.currentPath(),
+                root,
                 config.relativePaths(),
                 config.settings().searchMaxResults());
         if (selectedSearchTab() == activeSearch || tabs.getSelectedComponent() == activeSearch.scroll()) {
@@ -909,9 +911,11 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
 
     private void rerenderAllSearchTabs() {
         int cap = config.settings().searchMaxResults();
-        Path root = controller.currentPath();
         boolean relative = config.relativePaths();
-        forEachSearchTab(tab -> tab.renderTable(root, relative, cap));
+        forEachSearchTab(tab -> {
+            Path root = tab.root() != null ? tab.root() : controller.currentPath();
+            tab.renderTable(root, relative, cap);
+        });
         refreshStatusForSelectedTab();
     }
 
@@ -927,6 +931,24 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         if (!searchMode) {
             renderBrowse();
         }
+    }
+
+    /** Address bar follows the selected search tab's root, or the browsed folder otherwise. */
+    private void syncAddressForSelectedTab() {
+        SearchResultTab selected = selectedSearchTab();
+        Path path = selected != null && selected.root() != null
+                ? selected.root()
+                : controller.currentPath();
+        if (path == null) {
+            return;
+        }
+        String display = path.toString();
+        if (!Objects.equals(address.getText(), display)) {
+            address.setText(display);
+            address.setCaretPosition(display.length());
+        }
+        setTitle(Messages.APP_NAME + " — " + display);
+        updateIndexCreatedLabel(path);
     }
 
     private void forEachSearchTab(java.util.function.Consumer<SearchResultTab> action) {
@@ -1358,8 +1380,9 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             searchMode = false;
             if (activeSearch != null) {
                 activeSearch.markCancelled();
+                Path root = activeSearch.root() != null ? activeSearch.root() : controller.currentPath();
                 activeSearch.renderTable(
-                        controller.currentPath(),
+                        root,
                         config.relativePaths(),
                         config.settings().searchMaxResults());
             }
@@ -1747,11 +1770,12 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
             activeSearch.markCancelled();
         }
         activeSearch = openNewSearchTab();
-        activeSearch.reset(pendingSearchFilter);
+        activeSearch.reset(pendingSearchFilter, controller.currentPath());
         searchMode = true;
         cancelSearch.setEnabled(true);
         clearBanner();
         status.setText(Messages.SEARCHING);
+        syncAddressForSelectedTab();
         if (!searchRenderTimer.isRunning()) {
             searchRenderTimer.start();
         }

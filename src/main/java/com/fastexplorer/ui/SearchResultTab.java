@@ -23,6 +23,7 @@ public final class SearchResultTab {
     private final String title;
 
     private ExtensionFilter filter = ExtensionFilter.all();
+    private Path root;
     private long elapsed;
     private boolean finished;
     private boolean dirty;
@@ -63,6 +64,10 @@ public final class SearchResultTab {
         return filter;
     }
 
+    public Path root() {
+        return root;
+    }
+
     public void setFilter(ExtensionFilter filter) {
         this.filter = filter == null ? ExtensionFilter.all() : filter;
     }
@@ -92,7 +97,12 @@ public final class SearchResultTab {
     }
 
     public void reset(ExtensionFilter filter) {
+        reset(filter, root);
+    }
+
+    public void reset(ExtensionFilter filter, Path searchRoot) {
         this.filter = filter == null ? ExtensionFilter.all() : filter;
+        this.root = searchRoot;
         hits.clear();
         model.setRows(List.of());
         elapsed = 0;
