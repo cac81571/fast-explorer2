@@ -247,8 +247,14 @@ public final class MainFrame extends JFrame implements ExplorerController.Listen
         tabs.setName("mainTabs");
         tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_CLOSE_CALLBACK,
                 (IntConsumer) this::closeSearchTabAt);
-        tabs.addChangeListener(e -> refreshStatusForSelectedTab());
+        tabs.addChangeListener(e -> {
+            if (tabs.getSelectedComponent() == indexPanel) {
+                refreshIndex();
+            }
+            refreshStatusForSelectedTab();
+        });
         split.setRightComponent(tabs);
+        refreshIndex();
         installKeys();
         tuneFields();
         applyBannerColors();
