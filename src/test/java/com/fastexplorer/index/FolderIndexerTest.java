@@ -141,6 +141,65 @@ class FolderIndexerTest {
     }
 
     @Test
+    void reindexSkipsUnchangedDirectoryWrites() throws Exception {
+        Path root = temp.resolve("stable");
+        Path sub = root.resolve("sub");
+        Files.createDirectories(sub);
+        AtomicInteger lists = new AtomicInteger();
+        AtomicInteger rootVersion = new AtomicInteger(0);
+        DirectoryLister lister = (dir, cancelled, deadline) -> {
+            lists.incrementAndGet();
+            if (dir.equals(root)) {
+                long modified = 1_000L + rootVersion.get() * 1_000L;
+                return new ListResult(List.of(
+                        directory("sub"),
+                        new FileEntry("a.txt", EntryKind.FILE, 5, modified)), true, 0, 2);
+            }
+            return new ListResult(List.of(file("b.txt")), true, 0, 1);
+        };
+        open(lister);
+        CountDownLatch first = new CountDownLatch(1);
+        indexer.setListener(record -> {
+            if (record.status() == IndexRecord.Status.DONE) {
+                first.countDown();
+            }
+        });
+        assertTrue(indexer.start(root, 0));
+        assertTrue(first.await(5, TimeUnit.SECONDS));
+        String rootKey = PathStrings.cacheKey(root);
+        String subKey = PathStrings.cacheKey(sub);
+        long rootListedAt = cache.find(rootKey).orElseThrow().listedAtEpochMillis();
+        long subListedAt = cache.find(subKey).orElseThrow().listedAtEpochMillis();
+        int listsAfterFirst = lists.get();
+
+        Thread.sleep(5);
+        CountDownLatch second = new CountDownLatch(1);
+        indexer.setListener(record -> {
+            if (record.status() == IndexRecord.Status.DONE) {
+                second.countDown();
+            }
+        });
+        assertTrue(indexer.start(root, 0));
+        assertTrue(second.await(5, TimeUnit.SECONDS));
+        assertEquals(rootListedAt, cache.find(rootKey).orElseThrow().listedAtEpochMillis());
+        assertEquals(subListedAt, cache.find(subKey).orElseThrow().listedAtEpochMillis());
+        assertTrue(lists.get() > listsAfterFirst);
+
+        rootVersion.incrementAndGet();
+        long afterChange = System.currentTimeMillis();
+        CountDownLatch third = new CountDownLatch(1);
+        indexer.setListener(record -> {
+            if (record.status() == IndexRecord.Status.DONE) {
+                third.countDown();
+            }
+        });
+        assertTrue(indexer.start(root, 0));
+        assertTrue(third.await(5, TimeUnit.SECONDS));
+        assertTrue(cache.find(rootKey).orElseThrow().listedAtEpochMillis() >= afterChange);
+        assertEquals(subListedAt, cache.find(subKey).orElseThrow().listedAtEpochMillis());
+    }
+
+    @Test
     void skipsInaccessibleFoldersAndContinues() throws Exception {
         Path root = temp.resolve("mixed");
         Path ok = root.resolve("ok");

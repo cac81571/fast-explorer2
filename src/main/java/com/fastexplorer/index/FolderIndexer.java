@@ -3,6 +3,7 @@ package com.fastexplorer.index;
 import com.fastexplorer.cache.ListingCache;
 import com.fastexplorer.fs.DirectoryLister;
 import com.fastexplorer.fs.ListingException;
+import com.fastexplorer.model.DirectorySnapshot;
 import com.fastexplorer.model.EntryKind;
 import com.fastexplorer.model.FileEntry;
 import com.fastexplorer.model.ListResult;
@@ -12,6 +13,7 @@ import com.fastexplorer.util.PathStrings;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -21,10 +23,14 @@ import java.util.logging.Logger;
 
 /**
  * Walks one folder tree on a single background thread and stores each directory listing
- * in the search cache. Overlapping roots are refused. Inaccessible folders are skipped.
+ * in the search cache. Unchanged listings are not rewritten. Overlapping roots are refused.
+ * Inaccessible folders are skipped.
  */
 public final class FolderIndexer {
     private static final Logger LOG = Logger.getLogger("fastexplorer");
+    /** How often RUNNING progress is flushed to the catalog / UI. */
+    private static final long PROGRESS_INTERVAL_MS = 250L;
+
     private final DirectoryLister lister;
     private final ListingCache cache;
     private final IndexCatalog catalog;
@@ -139,6 +145,7 @@ public final class FolderIndexer {
         int folders = 0;
         int files = 0;
         int errors = 0;
+        long[] lastProgressAt = {0L};
         ArrayDeque<Level> queue = new ArrayDeque<>();
         queue.add(new Level(root, 0));
         Set<String> seen = new HashSet<>();
@@ -162,10 +169,12 @@ public final class FolderIndexer {
                             folders, files, System.currentTimeMillis() - started, errors, "", maxDepth));
                     return;
                 }
-                try {
-                    cache.replace(key, listed.entries(), System.currentTimeMillis(), true);
-                } catch (RuntimeException e) {
-                    LOG.log(java.util.logging.Level.WARNING, "cache write failed during index: " + key, e);
+                if (!unchangedListing(key, listed.entries())) {
+                    try {
+                        cache.replace(key, listed.entries(), System.currentTimeMillis(), true);
+                    } catch (RuntimeException e) {
+                        LOG.log(java.util.logging.Level.WARNING, "cache write failed during index: " + key, e);
+                    }
                 }
                 folders++;
                 String relative = NameFilter.relative(rootKey, key);
@@ -182,8 +191,8 @@ public final class FolderIndexer {
                         files++;
                     }
                 }
-                publish(record(root, rootKey, IndexRecord.Status.RUNNING, started, 0,
-                        folders, files, System.currentTimeMillis() - started, errors, "", maxDepth));
+                publishProgress(record(root, rootKey, IndexRecord.Status.RUNNING, started, 0,
+                        folders, files, System.currentTimeMillis() - started, errors, "", maxDepth), lastProgressAt);
             } catch (ListingException e) {
                 if (e.kind() == ListingException.Kind.CANCELLED || job.cancelled) {
                     publish(record(root, rootKey, IndexRecord.Status.CANCELLED, started, System.currentTimeMillis(),
@@ -209,6 +218,25 @@ public final class FolderIndexer {
         }
         publish(record(root, rootKey, IndexRecord.Status.DONE, started, System.currentTimeMillis(),
                 folders, files, System.currentTimeMillis() - started, errors, "", maxDepth));
+    }
+
+    private boolean unchangedListing(String key, List<FileEntry> entries) {
+        try {
+            DirectorySnapshot previous = cache.find(key).orElse(null);
+            return previous != null && previous.sameAs(entries);
+        } catch (RuntimeException e) {
+            LOG.log(java.util.logging.Level.FINE, "cache read failed during index compare: " + key, e);
+            return false;
+        }
+    }
+
+    private void publishProgress(IndexRecord record, long[] lastProgressAt) {
+        long now = System.currentTimeMillis();
+        if (now - lastProgressAt[0] < PROGRESS_INTERVAL_MS) {
+            return;
+        }
+        lastProgressAt[0] = now;
+        publish(record);
     }
 
     private void publish(IndexRecord record) {

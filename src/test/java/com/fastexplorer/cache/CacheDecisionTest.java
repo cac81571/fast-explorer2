@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CacheDecisionTest {
     @Test
@@ -29,6 +31,19 @@ class CacheDecisionTest {
     void zeroTtlAlwaysRevalidates() {
         DirectorySnapshot snapshot = new DirectorySnapshot("k", 1_000, true, List.of(file("a")));
         assertEquals(CacheDecision.STALE, CacheDecision.decide(snapshot, 1_000, 0));
+    }
+
+    @Test
+    void sameAsRequiresCompleteMatchingEntries() {
+        DirectorySnapshot snapshot = new DirectorySnapshot("k", 1_000, true, List.of(file("a"), file("b")));
+        assertTrue(snapshot.sameAs(List.of(file("a"), file("b"))));
+        assertTrue(snapshot.sameAs(List.of(
+                new FileEntry("a", EntryKind.FILE, 1, 400),
+                new FileEntry("b", EntryKind.FILE, 1, 900))));
+        assertFalse(snapshot.sameAs(List.of(file("a"))));
+        assertFalse(snapshot.sameAs(List.of(file("a"), new FileEntry("b", EntryKind.FILE, 2, 10))));
+        assertFalse(snapshot.sameAs(List.of(file("a"), new FileEntry("b", EntryKind.FILE, 1, 2_000))));
+        assertFalse(new DirectorySnapshot("k", 1_000, false, List.of(file("a"))).sameAs(List.of(file("a"))));
     }
 
     private static FileEntry file(String name) {
